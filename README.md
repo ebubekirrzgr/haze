@@ -1,52 +1,313 @@
-# HAZE — Satmadan harca
+<p align="center">
+  <img src="apps/web/public/logo/haze-logo-sepya.svg" alt="HAZE" width="220">
+</p>
 
-Maaş ve birikim USDC, hUSDY (tokenize hazine bonosu) ve hXAU (tokenize altın) olarak kullanıcıya özel bir
-Soroban kasasında (**HazeVault**) teminat olarak durur ve getiri üretir. Kullanıcı Visa kartla harcar; her
-harcama teminata karşı Blend'den alınan USDC borcu olarak yazılır. Maaş günü borç otomatik kapanır; teminat
-hiç satılmaz. Stellar üzerinde: klasik varlık + SAC modeli sayesinde aynı token hem DEX'te path payment'la
-hem akıllı sözleşmede teminat olarak çalışır; kullanıcının cüzdanında XLM yok (sponsorlu rezervler + fee-bump).
+<h3 align="center">Spend without selling.</h3>
 
-Rise In × Stellar Pro Hackathon 2026 (19–20 Eylül, İstanbul). Hukuki uyum kapsam dışı.
+<p align="center">
+  Collateral-backed spending on Stellar. Salary and savings sit in a personal Soroban vault as USDC, tokenized treasuries and tokenized gold. Every card purchase is a USDC loan against that collateral. Payday repays it. The assets are never sold.
+</p>
+
+<p align="center">
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#smart-contracts">Smart contracts</a> ·
+  <a href="#design-decisions">Design decisions</a> ·
+  <a href="#api-reference">API</a> ·
+  <a href="RUNBOOK.md">Runbook</a> ·
+  <a href="README.tr.md">Türkçe</a>
+</p>
+
+---
+
+## Overview
+
+HAZE is a non-custodial spending account built on Stellar. Users hold yield-bearing assets in a per-user smart contract vault (**HazeVault**) and pay with a Visa card. Instead of liquidating assets at the point of sale, each authorization opens a small USDC borrow position in a lending pool against the vault's collateral. When the next salary arrives, the debt is repaid automatically and the remainder is added back as collateral.
+
+The result is a card that lets people keep their savings invested while spending against them, with no XLM in the user's wallet, no seed phrase, and no exchange in the loop.
+
+**What the user sees**
+
+| Screen | What happens |
+|---|---|
+| **Onboarding** | A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
+| **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, hUSDY (tokenized treasuries) and hXAU (tokenized gold) with a single passkey approval. |
+| **Card** | Contactless payments authorize in under 500 ms off-chain. The on-chain borrow follows seconds later from an operator queue. |
+| **Cash out** | Withdraw to a bank account in local currency without selling the underlying asset, via path payment and anchor withdrawal. |
+| **Payday** | The salary rule repays outstanding debt and re-collateralizes the rest. |
+
+**Assets**
+
+| Symbol | Description | Role |
+|---|---|---|
+| `USDC` | Circle USDC (testnet issuer) | Borrow asset, primary collateral |
+| `hUSDY` | Tokenized short-term treasury exposure | Yield-bearing collateral |
+| `hXAU` | Tokenized gold | Store-of-value collateral |
+| `hTRY` | Tokenized Turkish lira | On/off-ramp settlement leg |
+
+Turkey is the launch market. Amounts are presented in TRY and settled in USDC.
+
+---
+
+## Architecture
+
+```
+                 ┌──────────────────────┐        ┌──────────────────────┐
+                 │   apps/web  (PWA)    │        │  apps/terminal (POS) │
+                 │ passkey · earn · card│        │  TRY → USD → ASA     │
+                 └──────────┬───────────┘        └──────────┬───────────┘
+                            │ signed tx / JWT                │ ASA JSON
+                            ▼                                ▼
+                 ┌──────────────────────────────────────────────────────┐
+                 │                 services/api  (Hono)                 │
+                 │  sponsor · credit engine · card hold state machine   │
+                 │  salary rule · price bot + market maker · indexer    │
+                 │  anchor orchestration · optional Lithic integration  │
+                 └──────────┬──────────────────────────┬────────────────┘
+                            │ operator-signed calls     │ fee-bump / sponsored
+                            ▼                           ▼
+   ┌─────────────────────────────────────────────────────────────────────────┐
+   │                        Stellar testnet (Soroban)                        │
+   │                                                                         │
+   │   VaultFactory ──deploys──▶ HazeVault (one per user)                    │
+   │                                 │ submit(from = spender = to = vault)   │
+   │                                 ▼                                       │
+   │              Blend v2 pool  ◀── or ──▶  HazeCredit (fallback pool)      │
+   │                                 │                                       │
+   │                          MockOracle (Blend PriceFeed interface)         │
+   │                                                                         │
+   │   Classic layer: USDC / hUSDY / hXAU / hTRY assets + SACs,              │
+   │   AMM liquidity pools, path payments, SEP-10/38/6 anchor                │
+   └─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Repository layout
 
 ```
 haze/
-├── apps/web          Next.js PWA (HAZE marka kiti): passkey, Kazan, kart, nakde çevir, profil/işveren paneli
-├── apps/terminal     demo POS: TL tutar → USD → ASA
-├── contracts/        Rust · soroban-sdk 28
-│   ├── haze-vault      kullanıcı başına kasa: deposit/withdraw/borrow/repay (sahip), borrow_for_card/refund_for_card/settle_salary (operatör)
-│   ├── vault-factory   deterministik vault deploy (salt = sha256(owner))
-│   ├── haze-credit     Blend `submit` arayüzünü taklit eden yedek havuz (aynı zamanda test havuzu)
-│   └── mock-oracle     Blend PriceFeed uyumlu fiyat kaynağı
-├── services/api      Hono: sponsor (izin listesi + fee-bump), kredi motoru, ASA + hold durum makinesi, maaş kuralı, fiyat botu + market maker, indexer, anchor
-├── packages/stellar  SEP-1/10/38/6 istemcisi, işlem kurucular, kredi hesabı, Blend/HazeCredit okuma
-├── scripts/          anahtarlar, varlık ihracı + SAC, AMM, Haze kontrat dağıtımı, kendi Blend v2 dağıtımı (blend-utils), demo kullanıcı
-└── docs/brand-kit    HAZE marka sistemi (tasarım)
+├── apps/web            Next.js 15 PWA: passkey onboarding, Earn, Card, Cash out, Profile / employer panel
+├── apps/terminal       Dependency-free demo POS: TRY amount → USD → authorization (ASA)
+├── contracts/          Rust · soroban-sdk 28
+│   ├── haze-vault        Per-user vault: deposit / withdraw / borrow / repay (owner);
+│   │                     borrow_for_card / refund_for_card / settle_salary (operator)
+│   ├── vault-factory     Deterministic vault deployment, salt = sha256(owner)
+│   ├── haze-credit       Minimal lending pool implementing Blend's `submit` interface (fallback + test pool)
+│   └── mock-oracle       Blend PriceFeed-compatible price source
+├── services/api        Hono service: sponsor, credit engine, card flow, salary rule, prices, indexer, anchor
+├── packages/stellar    Shared client: SEP-1/10/38/6, transaction builders, credit math, Blend / HazeCredit readers
+├── scripts/            Key generation, asset issuance + SACs, AMM seeding, contract deployment, Blend v2 deployment, demo user
+└── docs/brand-kit      HAZE design system
 ```
 
-Kurulum ve demo adımları: **[RUNBOOK.md](RUNBOOK.md)**.
+---
 
-## Hızlı başlangıç (zincirsiz)
+## Why Stellar
+
+HAZE leans on properties that are specific to Stellar rather than generic EVM-style tooling.
+
+- **Classic assets and Stellar Asset Contracts share one token.** The same hUSDY that trades on the DEX through path payments is deposited as collateral in a Soroban contract with no wrapping step.
+- **Sponsored reserves and fee-bump transactions** remove XLM from the user's experience entirely. The user's account holds zero XLM; HAZE pays reserves and fees behind an allowlist.
+- **Path payments** convert salary and cash-outs across assets atomically in a single operation, with the anchor as the final leg.
+- **Stellar Ecosystem Proposals** provide a standard on/off-ramp: SEP-1 discovery, SEP-10 authentication, SEP-38 quotes, SEP-6 deposit-exchange and withdraw-exchange.
+- **Blend v2** provides isolated lending pools with a small, stable `submit` interface that a contract can call on its own behalf.
+- **Passkeys with the WebAuthn PRF extension** encrypt the account key locally, so custody stays with the user without a seed phrase.
+
+---
+
+## Smart contracts
+
+All contracts are written in Rust with `soroban-sdk` 28 and live in [`contracts/`](contracts/).
+
+### HazeVault
+
+One vault per user. The **owner** is the user's Stellar account. The **operator** is the HAZE API. The vault holds the user's lending pool positions and always calls the pool with `from = spender = to = vault`, so pool authorization is satisfied by the contract call itself.
+
+| Function | Caller | Purpose |
+|---|---|---|
+| `deposit(asset, amount)` | Owner | Pull asset from owner and supply as collateral |
+| `withdraw(asset, amount)` | Owner | Withdraw collateral to owner; reverts if the position becomes unhealthy |
+| `borrow(amount)` | Owner | Borrow USDC against collateral and send to owner |
+| `repay(amount)` | Owner | Repay debt with owner's USDC; any excess is re-supplied as collateral |
+| `set_daily_limit(limit)` / `set_frozen(bool)` | Owner | Card controls enforced on-chain |
+| `borrow_for_card(amount, auth_id)` | Operator | Borrow USDC for a card authorization and transfer to the settlement treasury. Idempotent on `auth_id` (SHA-256 of the issuer authorization token). Enforces daily limit and freeze. |
+| `refund_for_card(amount, auth_id)` | Operator | Void / refund: repay with USDC returned by the treasury, decrement the daily counter |
+| `settle_salary(amount, repay_amount)` | Operator | Pull salary via the owner's allowance, repay debt up to `repay_amount`, supply the remainder as collateral |
+| `positions()` / `card_state()` / `auth_amount(auth_id)` | Anyone | Read views |
+
+The operator surface is intentionally narrow. It cannot move collateral to an arbitrary address, and it cannot borrow beyond a card authorization.
+
+### VaultFactory
+
+Deploys vaults deterministically with `salt = sha256(owner)`, so the API can compute a user's vault address without querying the chain. The factory holds the shared configuration (operator, pool, USDC, settlement treasury). The admin can switch the pool address, which is how the Blend-to-HazeCredit fallback works without touching vault code.
+
+### HazeCredit
+
+A minimal lending pool that mirrors Blend's `submit(from, spender, to, requests)` signature and request types (`Supply`, `Withdraw`, `SupplyCollateral`, `WithdrawCollateral`, `Borrow`, `Repay`). It serves two purposes: the fallback pool if a self-hosted Blend deployment is unavailable, and the pool that HazeVault's native tests run against with real contract authorization.
+
+### MockOracle
+
+Implements Blend's `PriceFeed` interface (`lastprice`, `decimals`). Both Blend and HazeCredit read from it, so the price bot writes to a single contract.
+
+---
+
+## Design decisions
+
+**Authorization is scoped, not delegated.** The operator key can only call `borrow_for_card`, `refund_for_card` and `settle_salary`. Collateral withdrawal and free-form borrowing require the owner's passkey signature. A compromised API cannot drain a vault.
+
+**The vault is its own counterparty.** Blend's `submit` is always called with `from = spender = to = vault`. The pool's token pulls from the vault are pre-authorized with `authorize_as_current_contract` for the exact amount, and the contract tests verify this with real authorization rather than mocks.
+
+**Authorization is off-chain, borrowing is asynchronous.** The card issuer's authorization stream (ASA) is answered in under 500 ms from a credit calculation over cached positions. The on-chain borrow is opened immediately afterwards from an operator queue with retries. This is the only exposure window in the system, and the UI locks withdrawals while an authorization hold is open.
+
+**One price loop.** The oracle, the market maker's order book and the SEP-38 rate cache are updated in the same tick, so the pool and the DEX never disagree. In demo mode, hUSDY yield is modelled as price appreciation under accelerated time.
+
+**A fallback is part of the design.** If the self-hosted Blend v2 deployment is not ready, `VaultFactory.set_pool(HazeCredit)` switches new vaults to the fallback pool. Vault bytecode is identical in both modes.
+
+**Sponsorship is an allowlist, not a faucet.** The sponsor only fee-bumps a fixed set of operations: calls to the user's own vault, `VaultFactory.create_vault`, USDC approvals where the spender is the user's own vault, path payments between approved pairs, memo-tagged payments to the anchor treasury and trustlines for approved assets. Rate-limited per account.
+
+### Credit engine
+
+The authorization decision is a pure function in [`packages/stellar/src/credit.ts`](packages/stellar/src/credit.ts). All amounts are 7-decimal integers.
+
+```
+Effective collateral   EC = Σ amount × price × c_factor
+Effective liabilities  EL = Σ debt × price / l_factor  +  open holds / l_factor(USDC)
+Approve when           EC / (EL + amount / l_factor(USDC)) ≥ 1.25
+Displayed limit        (EC / 1.25 − EL) × l_factor(USDC)
+```
+
+### Card hold state machine
+
+```
+PENDING  ──borrow tx confirmed / card_borrow event──▶  BORROWED
+PENDING  ──3 failed attempts──────────────────────▶  FAILED     (surfaced in admin panel)
+BORROWED ──clearing webhook───────────────────────▶  CLEARED
+BORROWED ──void webhook───────────────────────────▶  REFUNDED   (treasury returns USDC, operator calls refund_for_card)
+```
+
+---
+
+## Getting started
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Node.js | 22.x | The API runs TypeScript natively with `--experimental-transform-types`. Node 26 removed this flag; use Node 22. |
+| pnpm | 10.x | `npm install -g pnpm@10` or Corepack |
+| Rust | stable | With the `wasm32v1-none` target |
+| stellar-cli | latest | Only for testnet deployment |
+
+```bash
+rustup target add wasm32v1-none
+cargo install --locked stellar-cli        # or: brew install stellar-cli
+stellar network add testnet \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015"
+```
+
+### Quick start without a chain
+
+The API ships with a fake chain (`CHAIN=fake`) that seeds a demo user with collateral, so the full UI and card flow can be exercised without testnet.
 
 ```bash
 pnpm install
-cp services/api/.env.example services/api/.env   # ya da pnpm --filter @haze/scripts keys
-CHAIN=fake pnpm dev:api      # :8787
-pnpm dev:web                 # :3000
-pnpm dev:terminal            # :3001
+cp services/api/.env.example services/api/.env       # fill *_SECRET with any valid S... keys, or run the keys script
+cp apps/web/.env.local.example apps/web/.env.local
+
+CHAIN=fake pnpm dev:api        # http://localhost:8787
+pnpm dev:web                   # http://localhost:3000
+pnpm dev:terminal              # http://localhost:3001
 ```
 
-## Testler
+Open the PWA, choose **Import demo account** and paste the `DEMO_USER_SECRET` from `.env`. Then open the terminal, select the card and tap **Contactless pay**.
+
+### Testnet deployment
+
+The full sequence, with checks at each step, is in [RUNBOOK.md](RUNBOOK.md). In summary:
 
 ```bash
-cargo test        # 24 kontrat testi (HazeVault gerçek kontrat yetkisiyle HazeCredit'e karşı)
-pnpm test         # kredi hesabı, anchor parçalama, ASA/hold makinesi, sponsor izin listesi, uçtan uca API
+pnpm --filter @haze/scripts keys          # generate and fund 8 keypairs, write .env and testnet.contracts.json
+pnpm --filter @haze/scripts fund-usdc     # USDC for treasury (or faucet.circle.com)
+pnpm --filter @haze/scripts assets        # issue hUSDY / hXAU / hTRY, deploy 4 SACs
+pnpm --filter @haze/scripts haze:deploy   # build wasm, deploy MockOracle, HazeCredit, VaultFactory
+pnpm --filter @haze/scripts amm           # seed USDC/hUSDY, USDC/hXAU, USDC/hTRY liquidity pools
+pnpm dev:api                              # price bot starts updating oracle + order book
+pnpm --filter @haze/scripts demo-user     # sponsored account, vault, collateral, allowance, card, anchor JWT
+pnpm dev:web && pnpm dev:terminal
+```
+
+At this point the demo runs end-to-end on the HazeCredit pool. Switching to a self-hosted Blend v2 deployment is one more step:
+
+```bash
+pnpm --filter @haze/scripts blend:deploy  # clones blend-utils, deploys BLND / backstop / pool, activates, sets blend.mode = blend
+# restart the API; GET /credit/<G> now reports poolMode: blend
+```
+
+### Card issuer (optional)
+
+HAZE integrates with the Lithic sandbox for real virtual Visa cards. Set `LITHIC_API_KEY`, register the ASA webhook at `$PUBLIC_URL/card/asa` and the transaction webhook at `$PUBLIC_URL/card/webhook`, then enable HMAC verification. Without Lithic, the demo terminal posts the same ASA payload directly to `/card/asa`, which is sufficient for a full demo.
+
+---
+
+## Testing
+
+```bash
+cargo test          # contract tests: HazeVault against HazeCredit with real contract authorization
+pnpm test           # credit math, anchor chunking, ASA / hold state machine, sponsor allowlist, end-to-end API
 pnpm typecheck
 ```
 
-## Kritik tasarım kararları
+Contract tests cover deposit, withdraw, borrow, repay, card borrow with idempotency and daily limits, refund, salary settlement, freeze, health checks and factory deployment. The TypeScript suites run on Node's built-in test runner with no additional framework.
 
-- **Operatör yetkisi kapsamlı:** haze-api yalnızca `borrow_for_card` (günlük limit, dondurma, idempotent auth_id), `refund_for_card`, `settle_salary` çağırabilir. Teminat çekme ve serbest borç yalnızca sahibin passkey imzasıyla.
-- **Vault = from = spender = to:** Blend `submit` yetkisi kontrat çağrısıyla kendiliğinden sağlanır; havuzun vault'tan token çekişi `authorize_as_current_contract` ile tam tutara yetkilendirilir (testlerde gerçek yetkiyle doğrulanır).
-- **Onay off-chain, borç asenkron:** ASA cevabı limit hesabıyla <500 ms; Blend borcu hemen ardından operatör kuyruğundan açılır. Tek risk penceresi bu birkaç saniyedir; UI açık hold varken çekimi kilitler.
-- **Tek fiyat servisi:** oracle ve market maker aynı döngüde güncellenir; hUSDY getirisi hızlandırılmış zamanla fiyat artışı olarak modellenir (sahnede söylenir).
-- **Yedek plan hazır:** Blend dağıtımı 8. saatte çalışmazsa `VaultFactory.set_pool(HazeCredit)`; vault kodu değişmez.
+---
+
+## API reference
+
+The API is a Hono service on port `8787`. All amounts in request and response bodies are 7-decimal strings unless suffixed `Float`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Liveness, pool mode, issuer status |
+| `GET` | `/config` | Public network and contract configuration for clients |
+| `POST` | `/onboard` · `/onboard/submit` | Sponsored account creation and vault deployment |
+| `POST` | `/tx/sponsor` | Fee-bump an allowlisted user transaction |
+| `GET` | `/users/:id` · `/users/:id/holds` · `/users/:id/notifications` · `/users/:id/anchor-txs` | User state |
+| `GET` | `/credit/:id` | Positions, reserves, prices, card state and available limit |
+| `POST` | `/rules` · `/allowance` | Salary rule and USDC allowance registration |
+| `POST` | `/anchor/token` | Store the user's SEP-10 JWT (signed client-side by the passkey-unlocked key) |
+| `POST` | `/salary/start` · `/salary/settle` | Salary deposit via SEP-38 + SEP-6, then `settle_salary` |
+| `POST` | `/cashout/start` · `GET /cashout/:userId/:id` | Withdraw to bank via SEP-6 withdraw-exchange |
+| `POST` | `/card/create` · `/card/asa` · `/card/webhook` | Card issuance, authorization stream, clearing / void |
+| `POST` | `/terminal/charge` · `/terminal/clear` · `/terminal/void` | Demo POS entry points |
+| `GET` | `/prices` · `POST /prices/tick` | Price service state and manual tick |
+| `GET` | `/admin/users` · `/admin/holds` · `POST /admin/holds/:authId/retry` | Operations panel |
+
+---
+
+## Demo scenario
+
+| Scene | Where | On-chain |
+|---|---|---|
+| Create account with a passkey | PWA | Sponsored account (0 XLM), `VaultFactory.create_vault`, SEP-10 |
+| Receive salary | Profile → Employer panel | SEP-38 quote, SEP-6 deposit-exchange, `settle_salary` |
+| Allocate savings | Earn → Allocation | 2× `PathPaymentStrictReceive` + 3× `vault.deposit` |
+| Pay at a café | Terminal → Contactless pay | ASA under 500 ms, then `borrow_for_card` → settlement treasury |
+| Cash out from gold | Cash out → From gold | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, path payment to anchor |
+| Payday | Profile → Simulate payday | `settle_salary`: repay, then re-supply the remainder as collateral |
+
+---
+
+## Status and scope
+
+- Runs on **Stellar testnet**. Contracts are not audited and must not be used with real funds.
+- Built for the **Rise In × Stellar Pro Hackathon 2026** (Istanbul, September 19–20).
+- Regulatory and compliance considerations (card issuing licences, KYC, lending regulation) are explicitly out of scope for this prototype.
+- The anchor is a mock (`tr-mock-anchor.fly.dev`). Yield on hUSDY is simulated as price appreciation under accelerated time and is stated as such in the demo.
+
+---
+
+## Documentation
+
+- [RUNBOOK.md](RUNBOOK.md) — step-by-step testnet setup, demo script and troubleshooting (Turkish)
+- [README.tr.md](README.tr.md) — this document in Turkish
+- [docs/brand-kit/HAZE-SISTEM.md](docs/brand-kit/HAZE-SISTEM.md) — design system: colour, type, logo and surface rules

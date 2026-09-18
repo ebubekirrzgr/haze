@@ -1,0 +1,14 @@
+{
+  "name": "HAZE",
+  "short_name": "HAZE",
+  "description": "Satmadan harca. Stellar üzerinde teminatlı kart.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3EBDC",
+  "theme_color": "#F3EBDC",
+  "lang": "tr",
+  "icons": [
+    { "src": "/logo/haze-ikon-altin.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/logo/haze-ikon-altin.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

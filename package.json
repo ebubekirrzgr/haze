@@ -1,0 +1,15 @@
+{
+  "name": "haze",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @haze/api dev",
+    "dev:api:fake": "CHAIN=fake pnpm --filter @haze/api dev",
+    "dev:web": "pnpm --filter @haze/web dev",
+    "dev:terminal": "pnpm --filter @haze/terminal dev",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "contracts:build": "cargo build --target wasm32v1-none --release -p haze-vault -p vault-factory -p haze-credit -p mock-oracle",
+    "contracts:test": "cargo test"
+  }
+}

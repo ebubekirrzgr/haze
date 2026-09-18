@@ -1,0 +1,40 @@
+{
+  "network": "testnet",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "horizonUrl": "https://horizon-testnet.stellar.org",
+  "anchorHomeDomain": "tr-mock-anchor.fly.dev",
+  "anchorTreasury": "GCLCZEQZ2THTEDAOFI66LACNPLY4OBKN7VKLEZFMBIHYKYQOW2W7T3Z6",
+  "anchorUsdcIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+  "accounts": {
+    "sponsor": "",
+    "operator": "",
+    "issuer": "",
+    "distributor": "",
+    "treasury": "",
+    "settlement": "",
+    "oracleAdmin": ""
+  },
+  "assets": {
+    "USDC": { "code": "USDC", "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "sac": "" },
+    "hUSDY": { "code": "hUSDY", "issuer": "", "sac": "" },
+    "hXAU": { "code": "hXAU", "issuer": "", "sac": "" },
+    "hTRY": { "code": "hTRY", "issuer": "", "sac": "" }
+  },
+  "blend": {
+    "mode": "blend",
+    "poolFactory": "",
+    "backstop": "",
+    "emitter": "",
+    "blndToken": "",
+    "lpToken": "",
+    "pool": "",
+    "oracle": ""
+  },
+  "haze": {
+    "vaultWasmHash": "",
+    "vaultFactory": "",
+    "hazeCredit": "",
+    "mockOracle": ""
+  }
+}

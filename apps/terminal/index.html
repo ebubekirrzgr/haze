@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>haze-terminal — demo POS</title>
+<style>
+@font-face { font-family: 'Michroma'; src: url('/fonts/michroma-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; font-weight: 400; src: url('/fonts/space-grotesk-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; font-weight: 500; src: url('/fonts/space-grotesk-latin-500-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; font-weight: 600; src: url('/fonts/space-grotesk-latin-600-normal.woff2') format('woff2'); font-display: swap; }
+:root { --altin:#C8A24A; --sepya:#3B3226; --kum:#EADFC8; --krem:#F6F0E4; --pudra:#EBD9CF; --ikincil:#6B5B45; --zeytin:#5E7F4F; --kiremit:#B5523B; }
+* { box-sizing: border-box; }
+body { margin:0; min-height:100vh; font-family:'Space Grotesk',sans-serif; color:var(--krem); background:#2E271F; display:flex; align-items:center; justify-content:center; padding:24px; }
+.pos { width: 380px; border-radius: 28px; background: rgba(59,50,38,0.9); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.4); padding: 22px; }
+.ust { display:flex; justify-content:space-between; align-items:center; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#D8CBB2; }
+.rozet { background: var(--pudra); color: var(--kiremit); border-radius: 13px; padding: 4px 10px; font-size: 11px; font-weight: 600; letter-spacing: .1em; }
+.disp { font-family:'Michroma',sans-serif; }
+.tutar { font-size: 44px; text-align:center; margin: 18px 0 6px; font-variant-numeric: tabular-nums; }
+.alt { text-align:center; font-size:13px; color:#D8CBB2; min-height: 20px; }
+.tus { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-top:16px; }
+.tus button { height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:var(--krem); font:inherit; font-size:20px; cursor:pointer; }
+.tus button:active { background: rgba(255,255,255,0.14); }
+.satir { display:flex; gap:8px; margin-top:14px; }
+select, input { flex:1; height:44px; border-radius:14px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.06); color:var(--krem); font:inherit; padding:0 12px; }
+.btn { width:100%; height:64px; border-radius:22px; border:0; font:inherit; font-size:18px; font-weight:500; cursor:pointer; margin-top:14px; }
+.btn.altin { background:var(--altin); color:var(--sepya); }
+.btn.cam { background:rgba(255,255,255,0.08); color:var(--krem); height:44px; font-size:15px; border-radius:16px; }
+.btn[disabled] { opacity:.45; pointer-events:none; }
+.sonuc { margin-top:14px; padding:14px; border-radius:18px; background:rgba(255,255,255,0.06); font-size:14px; line-height:1.5; }
+.sonuc.ok { border:1px solid rgba(94,127,79,0.7); } .sonuc.red { border:1px solid rgba(181,82,59,0.7); }
+.k { color:#D8CBB2; }
+.log { margin-top:10px; font-size:12px; color:#A8997E; font-family: ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="pos">
+  <div class="ust"><span>haze-terminal · POS</span><span class="rozet">DEMO MODU</span></div>
+  <div class="disp tutar" id="tutar">₺450</div>
+  <div class="alt" id="alt">MCC 5814 · Kafe · Bursa · Visa temassız</div>
+  <div class="tus">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="00">00</button><button data-k="0">0</button><button data-k="C">C</button>
+  </div>
+  <div class="satir">
+    <select id="merchant">
+      <option value="KAFE|BURSA|5814">Kafe · Bursa · 5814</option>
+      <option value="MARKET|ISTANBUL|5411">Market · İstanbul · 5411</option>
+      <option value="RESTORAN|IZMIR|5812">Restoran · İzmir · 5812</option>
+      <option value="ECZANE|ANKARA|5912">Eczane · Ankara · 5912</option>
+    </select>
+  </div>
+  <div class="satir">
+    <select id="user"><option value="">Kart seç (haze-api /admin/users)</option></select>
+  </div>
+  <div class="satir"><input id="api" value="http://localhost:8787" /></div>
+  <button class="btn altin" id="ode">Temassız öde</button>
+  <div id="sonuc"></div>
+  <div class="satir" id="sonrasi" style="display:none">
+    <button class="btn cam" id="clear">Clearing</button>
+    <button class="btn cam" id="void">Void (iade)</button>
+  </div>
+  <div class="log" id="log"></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+let digits = "450";
+let lastToken = null;
+const render = () => { $("#tutar").textContent = "₺" + (Number(digits || "0")).toLocaleString("tr-TR"); };
+document.querySelectorAll(".tus button").forEach((b) => b.addEventListener("click", () => {
+  const k = b.dataset.k;
+  if (k === "C") digits = ""; else if (digits.length < 7) digits += k;
+  render();
+}));
+const api = () => $("#api").value.replace(/\/$/, "");
+const log = (m) => { $("#log").textContent = (new Date().toLocaleTimeString("tr-TR") + "  " + m + "\n" + $("#log").textContent).slice(0, 1500); };
+async function loadUsers() {
+  try {
+    const r = await fetch(api() + "/admin/users"); const us = await r.json();
+    const sel = $("#user"); sel.innerHTML = "";
+    for (const u of us.filter((u) => u.card)) { const o = document.createElement("option"); o.value = u.id; o.textContent = `HAZE •••• ${u.card.last4} · ${u.id.slice(0, 6)}…`; sel.appendChild(o); }
+    if (!sel.options.length) sel.innerHTML = '<option value="">Kartlı kullanıcı yok</option>';
+    const fx = await fetch(api() + "/prices").then((r) => r.json());
+    if (fx.USDTRY) $("#alt").textContent = `1 USD = ₺${fx.USDTRY.toFixed(2)} (SEP-38) · Visa temassız`;
+  } catch (e) { log("API'ye ulaşılamadı: " + e.message); }
+}
+$("#api").addEventListener("change", loadUsers);
+loadUsers();
+$("#ode").addEventListener("click", async () => {
+  const userId = $("#user").value; if (!userId) return alert("Kart seç");
+  const [merchant, city, mcc] = $("#merchant").value.split("|");
+  const amountTry = Number(digits || "0"); if (!amountTry) return;
+  $("#ode").disabled = true; $("#sonuc").innerHTML = ""; $("#sonrasi").style.display = "none";
+  const t0 = performance.now();
+  try {
+    const r = await fetch(api() + "/terminal/charge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, amountTry, merchant, city, mcc }) }).then((r) => r.json());
+    const ms = Math.round(performance.now() - t0);
+    lastToken = r.token;
+    const ok = r.result === "APPROVED" || r.via === "lithic";
+    $("#sonuc").className = "sonuc " + (ok ? "ok" : "red");
+    $("#sonuc").innerHTML = ok
+      ? `<div class="disp" style="font-size:18px">ONAYLANDI</div><div><span class="k">İşyeri</span> ${r.descriptor}</div><div><span class="k">Tutar</span> ₺${amountTry} → $${(r.usdCents / 100).toFixed(2)} → ${r.usdc ? (Number(r.usdc) / 1e7).toFixed(2) : "?"} USDC borç</div><div><span class="k">Kalan limit</span> ${r.haze ? (Number(r.haze.remainingLimit) / 1e7).toFixed(2) + " USDC" : "-"}</div><div><span class="k">Onay süresi</span> ${ms} ms · ${r.via}</div>`
+      : `<div class="disp" style="font-size:18px">REDDEDİLDİ</div><div>${r.decline_reason || r.error || JSON.stringify(r)}</div><div><span class="k">Süre</span> ${ms} ms</div>`;
+    $("#sonrasi").style.display = ok ? "flex" : "none";
+    log(`${merchant} ₺${amountTry} → ${r.result || r.via} (${ms} ms)`);
+  } catch (e) { $("#sonuc").className = "sonuc red"; $("#sonuc").textContent = e.message; }
+  $("#ode").disabled = false;
+});
+$("#clear").addEventListener("click", async () => { await fetch(api() + "/terminal/clear", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: lastToken }) }); log("clearing gönderildi"); });
+$("#void").addEventListener("click", async () => { await fetch(api() + "/terminal/void", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: lastToken }) }); log("void gönderildi → iade"); });
+render();
+</script>
+</body>
+</html>

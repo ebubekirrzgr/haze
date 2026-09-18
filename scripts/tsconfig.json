@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true, "rootDir": "..", "types": ["node"] },
+  "include": ["**/*.ts", "../testnet.contracts.json"],
+  "exclude": ["node_modules", "blend/haze-mock.ts"]
+}

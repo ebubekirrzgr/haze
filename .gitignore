@@ -1,0 +1,15 @@
+node_modules/
+target/
+dist/
+.next/
+*.db
+*.db-journal
+.env
+.env.local
+.stellar/
+*.wasm
+!contracts/**/fixtures/*.wasm
+.turbo/
+test_snapshots/
+*.db-shm
+*.db-wal

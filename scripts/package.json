@@ -1,0 +1,21 @@
+{
+  "name": "@haze/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "keys": "node --experimental-transform-types seed/keys.ts",
+    "assets": "node --experimental-transform-types assets/issue.ts",
+    "amm": "node --experimental-transform-types assets/amm.ts",
+    "fund-usdc": "node --experimental-transform-types seed/fund-usdc.ts",
+    "haze:deploy": "bash haze/deploy.sh",
+    "blend:deploy": "bash blend/deploy.sh",
+    "demo-user": "node --experimental-transform-types seed/demo-user.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@haze/stellar": "workspace:*",
+    "@stellar/stellar-sdk": "^17.1.0"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.0.0" }
+}

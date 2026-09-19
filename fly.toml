@@ -1,0 +1,31 @@
+# Fly.io uygulaması: haze-api (Frankfurt). Çalıştırma: fly launch --copy-config --no-deploy; fly volumes create haze_data --size 1 -r fra; fly secrets set ...; fly deploy
+app = "haze-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "services/api/Dockerfile"
+
+[env]
+  PORT = "8787"
+  DB_PATH = "/data/haze.db"
+  HAZE_CONFIG = "/app/testnet.contracts.json"
+  PRICE_INTERVAL_SEC = "30"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "off"     # fiyat botu ve kuyruk sürekli çalışmalı
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "haze_data"
+  destination = "/data"
+
+[checks]
+  [checks.health]
+    type = "http"
+    port = 8787
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"

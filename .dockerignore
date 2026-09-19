@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+target
+.next
+.blend-utils
+.git
+services/api/.env*
+services/api/haze.db*
+packages/bindings
+docs/brand-kit

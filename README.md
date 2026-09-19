@@ -201,6 +201,8 @@ BORROWED ──void webhook─────────────────�
 
 ## Technical documentation map
 
+The full technical write-up (architecture, components, Stellar integrations, design decisions and trade-offs, technical challenges) is in [docs/TECHNICAL.md](docs/TECHNICAL.md). The same material is spread across this README as follows:
+
 | Requirement | Section |
 |---|---|
 | Overall architecture | [Architecture](#architecture) |
@@ -366,6 +368,7 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 
 ## Documentation
 
+- [docs/TECHNICAL.md](docs/TECHNICAL.md) — technical documentation: architecture, components, Stellar integrations, trade-offs, challenges
 - [RUNBOOK.md](RUNBOOK.md) — step-by-step testnet setup, demo script and troubleshooting (Turkish)
 - [README.tr.md](README.tr.md) — this document in Turkish
 - [docs/brand-kit/HAZE-SISTEM.md](docs/brand-kit/HAZE-SISTEM.md) — design system: colour, type, logo and surface rules

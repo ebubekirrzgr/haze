@@ -201,6 +201,8 @@ BORROWED ──void webhook─────────────────�
 
 ## Teknik belge haritası
 
+Tam teknik yazı (mimari, bileşenler, Stellar entegrasyonları, tasarım kararları ve ödünleşimler, teknik zorluklar) İngilizce olarak [docs/TECHNICAL.md](docs/TECHNICAL.md) dosyasındadır. Aynı içerik bu README'de şu bölümlere dağılmıştır:
+
 | Gereksinim | Bölüm |
 |---|---|
 | Genel mimari | [Mimari](#mimari) |
@@ -366,6 +368,7 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 
 ## Belgeler
 
+- [docs/TECHNICAL.md](docs/TECHNICAL.md) — teknik belge (İngilizce): mimari, bileşenler, Stellar entegrasyonları, ödünleşimler, zorluklar
 - [RUNBOOK.md](RUNBOOK.md) — adım adım testnet kurulumu, demo akışı ve sorun giderme
 - [README.md](README.md) — bu belgenin İngilizcesi
 - [docs/brand-kit/HAZE-SISTEM.md](docs/brand-kit/HAZE-SISTEM.md) — tasarım sistemi: renk, tipografi, logo ve yüzey kuralları

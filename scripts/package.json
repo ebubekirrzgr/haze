@@ -13,6 +13,7 @@
     "demo-user": "node --experimental-transform-types seed/demo-user.ts",
     "pool:supply": "node --experimental-transform-types haze/supply.ts",
     "rehearse": "node --experimental-transform-types seed/rehearse.ts",
+    "lithic": "node --experimental-transform-types seed/lithic.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

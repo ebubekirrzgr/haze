@@ -35,6 +35,42 @@ export interface AsaRequest {
   haze_try_amount?: string;
 }
 
+/** Lithic ASA isteği ham yükü: kart token'ı `card.token` içinde gelir; haze-terminal ise düz `card_token` gönderir. */
+export interface LithicAsaRaw extends Partial<AsaRequest> {
+  card?: { token?: string; last_four?: string };
+  merchant?: AsaRequest["merchant"];
+}
+
+/** Lithic/terminal yükünü tek şemaya indirger. */
+export function normalizeAsaRequest(raw: LithicAsaRaw): { req: AsaRequest; fromLithic: boolean } {
+  const fromLithic = !!raw.card?.token && !raw.card_token;
+  return {
+    fromLithic,
+    req: {
+      ...(raw as AsaRequest),
+      card_token: raw.card_token ?? raw.card?.token ?? "",
+      merchant: raw.merchant ?? { descriptor: "Unknown merchant" },
+    },
+  };
+}
+
+/**
+ * Lithic yalnızca belirli `result` değerlerini kabul eder (APPROVED, INSUFFICIENT_FUNDS, CARD_PAUSED, VELOCITY_EXCEEDED, …);
+ * "DECLINED" ya da ek alanlar (decline_reason, haze, balance) MALFORMED_ASA_RESPONSE ile reddedilir.
+ */
+export function toLithicAsaResponse(res: AsaResponse): { result: string } {
+  if (res.result === "APPROVED") return { result: "APPROVED" };
+  const map: Record<string, string> = {
+    CARD_FROZEN: "CARD_PAUSED",
+    DAILY_LIMIT_EXCEEDED: "VELOCITY_EXCEEDED",
+    INSUFFICIENT_COLLATERAL: "INSUFFICIENT_FUNDS",
+    NO_COLLATERAL: "INSUFFICIENT_FUNDS",
+    UNKNOWN_CARD: "INSUFFICIENT_FUNDS",
+    DUPLICATE_AUTHORIZATION: "INSUFFICIENT_FUNDS",
+  };
+  return { result: map[res.decline_reason ?? ""] ?? "INSUFFICIENT_FUNDS" };
+}
+
 export interface AsaResponse {
   result: "APPROVED" | "DECLINED";
   decline_reason?: string;
@@ -84,11 +120,32 @@ export class LithicClient {
   }
 }
 
-/** X-Lithic-HMAC = base64(HMAC-SHA256(secret, rawBody)) */
-export function verifyLithicHmac(secret: string, rawBody: string, header: string | undefined): boolean {
-  if (!header) return false;
-  const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(header);
-  return a.length === b.length && timingSafeEqual(a, b);
+/**
+ * Lithic webhook imzası (ASA ve Events aynı yöntem: Standard Webhooks / Svix).
+ *   webhook-signature = "v1,base64(HMAC-SHA256(base64decode(secret sans "whsec_"), `${webhook-id}.${webhook-timestamp}.${rawBody}`))"
+ * Birden fazla imza boşlukla ayrılmış gelebilir (anahtar rotasyonu); biri eşleşirse geçerli. Zaman damgası ±5 dk.
+ */
+export function verifyLithicWebhook(
+  secret: string,
+  rawBody: string,
+  headers: { id?: string; timestamp?: string; signature?: string },
+  nowSec = Math.floor(Date.now() / 1000),
+): boolean {
+  if (!headers.id || !headers.timestamp || !headers.signature) return false;
+  const ts = Number(headers.timestamp);
+  if (!Number.isFinite(ts) || Math.abs(nowSec - ts) > 300) return false;
+  const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const expected = createHmac("sha256", key).update(`${headers.id}.${headers.timestamp}.${rawBody}`).digest();
+  for (const part of headers.signature.split(" ")) {
+    const [version, sig] = part.split(",");
+    if (version !== "v1" || !sig) continue;
+    const given = Buffer.from(sig, "base64");
+    if (given.length === expected.length && timingSafeEqual(given, expected)) return true;
+  }
+  return false;
+}
+
+/** Hono/İstek başlıklarından imza üçlüsünü toplar. */
+export function webhookHeaders(get: (name: string) => string | undefined) {
+  return { id: get("webhook-id"), timestamp: get("webhook-timestamp"), signature: get("webhook-signature") };
 }

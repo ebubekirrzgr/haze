@@ -249,7 +249,13 @@ pnpm --filter @haze/scripts blend:deploy  # blend-utils'i klonlar, BLND / backst
 
 ### Kart ihraççısı (opsiyonel)
 
-HAZE, gerçek sanal Visa kartlar için Lithic sandbox ile entegre çalışır. `LITHIC_API_KEY` değerini girin, ASA webhook'unu `$PUBLIC_URL/card/asa`, işlem webhook'unu `$PUBLIC_URL/card/webhook` adresine kaydedin ve HMAC doğrulamasını açın. Lithic yoksa demo terminali aynı ASA yükünü doğrudan `/card/asa` adresine gönderir; tam bir demo için bu yeterlidir.
+HAZE, gerçek sanal Visa kartlar için Lithic sandbox ile entegre çalışır. API'yi internete açın (örneğin `cloudflared tunnel --url http://localhost:8787`), `LITHIC_API_KEY` değerini girin ve şunu koşun:
+
+```bash
+pnpm --filter @haze/scripts lithic https://<tünel-adresiniz>.trycloudflare.com
+```
+
+Script, Auth Stream Access webhook'unu kaydeder, `card_transaction.updated` olaylarına abone olur, iki webhook gizli anahtarını saklar ve Standard Webhooks imza doğrulamasını açar. Kart yetkilendirmeleri Lithic'in 6 saniyelik penceresinde HAZE tarafından cevaplanır; clearing ve void olayları imzalı webhook olarak gelir. Lithic yoksa demo terminali aynı yetkilendirme akışını doğrudan yürütür; tam bir demo için bu yeterlidir.
 
 ---
 

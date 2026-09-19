@@ -10,7 +10,7 @@ import { Db } from "./db.ts";
 import { LiveChain, parseInner, type ChainOps } from "./chain.ts";
 import { CreditService } from "./modules/credit.ts";
 import { CardService } from "./modules/card.ts";
-import { LithicClient, verifyLithicHmac, type AsaRequest } from "./modules/lithic.ts";
+import { LithicClient, verifyLithicWebhook, webhookHeaders, type AsaRequest, normalizeAsaRequest, toLithicAsaResponse, type LithicAsaRaw } from "./modules/lithic.ts";
 import { RulesService } from "./modules/rules.ts";
 import { PriceService } from "./modules/prices.ts";
 import { Indexer } from "./modules/indexer.ts";
@@ -244,20 +244,24 @@ export function buildApp(s: Services) {
 
   app.post("/card/asa", async (c) => {
     const raw = await c.req.text();
-    if (s.env.verifyAsaHmac && s.env.lithic.webhookSecret) {
-      if (!verifyLithicHmac(s.env.lithic.webhookSecret, raw, c.req.header("x-lithic-hmac"))) return c.json({ error: "bad hmac" }, 401);
+    if (s.env.verifyAsaHmac) {
+      // Tünel üzerinden internete açık uç: imzasız ASA kabul edilirse herkes kasalara karşı harcama yetkilendirebilir.
+      if (!s.env.lithic.webhookSecret || !verifyLithicWebhook(s.env.lithic.webhookSecret, raw, webhookHeaders((n) => c.req.header(n)))) return c.json({ error: "bad signature" }, 401);
     }
-    const body = JSON.parse(raw) as AsaRequest;
-    const res = await s.card.authorize(body);
-    return c.json(res);
+    const { req, fromLithic } = normalizeAsaRequest(JSON.parse(raw) as LithicAsaRaw);
+    s.log(`ASA ← ${fromLithic ? "lithic" : "direct"} ${req.token} card …${req.card_token.slice(-4)} ${req.amount}c ${req.merchant.descriptor}`);
+    const res = await s.card.authorize(req);
+    return c.json(fromLithic ? toLithicAsaResponse(res) : res);
   });
 
   app.post("/card/webhook", async (c) => {
     const raw = await c.req.text();
-    if (s.env.verifyAsaHmac && s.env.lithic.webhookSecret) {
-      if (!verifyLithicHmac(s.env.lithic.webhookSecret, raw, c.req.header("webhook-signature") ?? c.req.header("x-lithic-hmac"))) return c.json({ error: "bad hmac" }, 401);
+    if (s.env.verifyAsaHmac) {
+      if (!s.env.lithic.eventSecret || !verifyLithicWebhook(s.env.lithic.eventSecret, raw, webhookHeaders((n) => c.req.header(n)))) return c.json({ error: "bad signature" }, 401);
     }
-    const ev = JSON.parse(raw) as { event_type?: string; token?: string; status?: string; amount?: number; card_token?: string };
+    // Lithic event webhook'u zarf gönderir: { event_type, payload: { token, status, amount, … } }; düz işlem gövdesi de kabul edilir.
+    const env = JSON.parse(raw) as { event_type?: string; payload?: Record<string, unknown>; token?: string; status?: string; amount?: number };
+    const ev = (env.payload && typeof env.payload === "object" ? env.payload : env) as { token?: string; status?: string; amount?: number };
     if (ev.token && ev.status) await s.card.onTransactionEvent({ token: ev.token, status: ev.status, amount: ev.amount });
     return c.json({ ok: true });
   });

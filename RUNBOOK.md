@@ -52,13 +52,18 @@ Notlar
 - Var olan vault'lar `pool` adresini kuruluşta alır. Blend'e geçtikten sonra demo kullanıcıyı **yeniden** kurmak gerekir (vault deterministik; yeni vault için yeni demo anahtarı: `.env`'den `DEMO_USER_SECRET`'ı sil ve `keys` + `demo-user`).
 - Yedeğe dönüş: `testnet.contracts.json` → `blend.mode: "hazecredit"` + `stellar contract invoke --id <factory> -- set_pool --pool <hazeCredit>`.
 
-## 3. Lithic (opsiyonel)
+## 3. Lithic (gerçek sanal Visa)
 
-1. Sandbox API key → `.env` `LITHIC_API_KEY`. `PUBLIC_URL` tünel adresi (cloudflared).
-2. ASA kaydı: `curl -X POST $LITHIC_BASE_URL/auth_stream -H "Authorization: $KEY" -d '{"webhook_url":"$PUBLIC_URL/card/asa"}'`; `GET /auth_stream/secret` → `LITHIC_WEBHOOK_SECRET`, `VERIFY_ASA_HMAC=true`.
-3. Transaction webhook'u `$PUBLIC_URL/card/webhook`.
-4. `POST /card/create` artık gerçek sanal Visa döner; terminal `simulate/authorize` çağırır, ASA bize gelir.
-Lithic yoksa terminal aynı ASA JSON'unu doğrudan `/card/asa`'ya yollar (varsayılan) — demo için yeterli.
+1. Sandbox API key → `.env` `LITHIC_API_KEY`.
+2. API'yi internete aç: `cloudflared tunnel --url http://localhost:8787` → `https://xxxx.trycloudflare.com` (her başlatmada değişir).
+3. `pnpm --filter @haze/scripts lithic https://xxxx.trycloudflare.com` → ASA webhook'u (`/card/asa`), `card_transaction.updated` aboneliği (`/card/webhook`), iki gizli anahtar ve `PUBLIC_URL` `.env`'e yazılır, `VERIFY_ASA_HMAC=true` olur. haze-api `.env` değişince kendini yeniden başlatır.
+4. Demo kullanıcının kartı `demo_` ise Lithic kartı almak için: `sqlite3 services/api/haze.db "update users set card_token=NULL where id='<G>'"` ve `POST /card/create`.
+5. Terminal → Temassız öde: `simulate/authorize` → Lithic bize imzalı ASA gönderir (cevap süresi < 3 sn olmalı; Lithic 6 sn'de keser) → `borrow_for_card` → clearing/void Lithic webhook'uyla gelir.
+
+Notlar
+- Lithic ASA yükünde kart token'ı `card.token` içindedir; cevapta yalnızca `result` kabul edilir ve değer `APPROVED | INSUFFICIENT_FUNDS | CARD_PAUSED | VELOCITY_EXCEEDED | …` olmalıdır (`DECLINED` ya da ek alan → `MALFORMED_ASA_RESPONSE`). `normalizeAsaRequest` / `toLithicAsaResponse` bunu yapar.
+- İmza: Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), gizli anahtar `whsec_…`. ASA ve olay aboneliğinin anahtarları farklıdır (`LITHIC_WEBHOOK_SECRET`, `LITHIC_EVENT_SECRET`). Tünel açıkken imzasız istek kabul etmeyin.
+- Lithic yoksa terminal aynı akışı doğrudan `/terminal/charge` üzerinden yürütür (varsayılan) — demo için yeterli.
 
 ## 4. Demo senaryosu (3 dk) — komut karşılıkları
 

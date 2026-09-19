@@ -34,7 +34,7 @@ function env(): Env {
     settlement: Keypair.random(),
     treasury: Keypair.random(),
     oracleAdmin: Keypair.random(),
-    lithic: { apiKey: "", webhookSecret: "", baseUrl: "", enabled: false },
+    lithic: { apiKey: "", webhookSecret: "", eventSecret: "", baseUrl: "", enabled: false },
     yieldAccelerationDaysPerMinute: 1,
     husdyApy: 0.05,
     priceIntervalSec: 30,

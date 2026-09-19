@@ -249,7 +249,13 @@ pnpm --filter @haze/scripts blend:deploy  # clones blend-utils, deploys BLND / b
 
 ### Card issuer (optional)
 
-HAZE integrates with the Lithic sandbox for real virtual Visa cards. Set `LITHIC_API_KEY`, register the ASA webhook at `$PUBLIC_URL/card/asa` and the transaction webhook at `$PUBLIC_URL/card/webhook`, then enable HMAC verification. Without Lithic, the demo terminal posts the same ASA payload directly to `/card/asa`, which is sufficient for a full demo.
+HAZE integrates with the Lithic sandbox for real virtual Visa cards. Expose the API (for example `cloudflared tunnel --url http://localhost:8787`), set `LITHIC_API_KEY`, then run:
+
+```bash
+pnpm --filter @haze/scripts lithic https://<your-tunnel>.trycloudflare.com
+```
+
+The script enrols the Auth Stream Access webhook, subscribes to `card_transaction.updated`, stores both webhook secrets and turns on Standard Webhooks signature verification. Card authorizations are then answered by HAZE inside Lithic's 6-second window, and clearing or void events arrive as signed webhooks. Without Lithic, the demo terminal drives the same authorization flow directly, which is sufficient for a full demo.
 
 ---
 

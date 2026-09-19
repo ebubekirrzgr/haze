@@ -19,7 +19,7 @@ export interface Env {
   oracleAdmin: Keypair;
   /** Blend modunda blend-utils oraclemock admin'i (= BLEND_ADMIN) */
   blendAdmin?: Keypair;
-  lithic: { apiKey: string; webhookSecret: string; baseUrl: string; enabled: boolean };
+  lithic: { apiKey: string; webhookSecret: string; eventSecret: string; baseUrl: string; enabled: boolean };
   /** getiri hızlandırma: 1 dakika = kaç gün */
   yieldAccelerationDaysPerMinute: number;
   /** hUSDY yıllık getiri (demo) */
@@ -57,6 +57,7 @@ export function loadEnv(): Env {
     lithic: {
       apiKey: process.env.LITHIC_API_KEY ?? "",
       webhookSecret: process.env.LITHIC_WEBHOOK_SECRET ?? "",
+      eventSecret: process.env.LITHIC_EVENT_SECRET ?? "",
       baseUrl: process.env.LITHIC_BASE_URL ?? "https://sandbox.lithic.com/v1",
       enabled: !!process.env.LITHIC_API_KEY,
     },

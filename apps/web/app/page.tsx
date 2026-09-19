@@ -2,7 +2,7 @@
 import { ASSET_META, type AssetCode } from "@haze/stellar/browser";
 import Link from "next/link";
 import { useState } from "react";
-import { Adimlar, DemoRozet, Logo, Sahne, Ust, Yukleniyor } from "@/components/ui.tsx";
+import { Adimlar, DemoRozet, Logo, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { useSession } from "@/lib/session.tsx";
 import { ago, expertTx, fmtNum, fmtPct, fmtTry, fmtUsd, labelHold } from "@/lib/format.ts";
@@ -153,8 +153,11 @@ function Dashboard() {
           <div style={{ marginTop: 8 }}>
             {live.rows.map((r) => (
               <div key={r.code} className="satir" style={{ fontSize: 14 }}>
-                <span>
-                  {r.code} <span className="ikincil num">{fmtNum(r.collateralFloat, ASSET_META[r.code as AssetCode]?.displayDecimals ?? 2)}</span>
+                <span className="vlogo-satir">
+                  <VarlikLogo code={r.code} size={26} />
+                  <span>
+                    {r.code} <span className="ikincil num">{fmtNum(r.collateralFloat, ASSET_META[r.code as AssetCode]?.displayDecimals ?? 2)}</span>
+                  </span>
                 </span>
                 <span className="num">
                   {fmtUsd(r.value)} <span className={r.apy > 0 ? "zeytin" : "ikincil"}>{r.apy > 0 ? fmtPct(r.apy) : "değer koruma"}</span>

@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from "react";
 import { ASSET_META, COLLATERAL_CODES, RWA_CODES, assetBlurb, toStroops, type AssetCode, type CollateralCode, type RwaCode } from "@haze/stellar/browser";
-import { Adimlar, Sahne, Ust, Yukleniyor } from "@/components/ui.tsx";
+import { Adimlar, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { api } from "@/lib/api.ts";
 import { useChain, useSession } from "@/lib/session.tsx";
@@ -150,9 +150,12 @@ export default function Kazan() {
       <div className="blok cam kart">
         {live?.rows.map((r) => (
           <div key={r.code} className="satir" style={{ padding: "6px 0" }}>
-            <div>
-              <div style={{ fontWeight: 500 }}>{r.code}</div>
-              <div className="ikincil" style={{ fontSize: 12.5 }}>{assetBlurb(r.code)} · c {r.c_factor}</div>
+            <div className="vlogo-satir">
+              <VarlikLogo code={r.code} size={32} />
+              <div>
+                <div style={{ fontWeight: 500 }}>{r.code}</div>
+                <div className="ikincil" style={{ fontSize: 12.5 }}>{assetBlurb(r.code)} · c {r.c_factor}</div>
+              </div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="num" style={{ fontWeight: 500 }}>{fmtUsd(r.value)}</div>
@@ -187,7 +190,7 @@ export default function Kazan() {
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="USDC" value={amount} onChange={(e) => setAmount(e.target.value)} />
             {codes.map((k) => (
               <div key={k} style={{ marginTop: 12 }}>
-                <div className="satir" style={{ fontSize: 14 }}><span>{k} <span className="ikincil">{ASSET_META[k].name}</span></span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
+                <div className="satir" style={{ fontSize: 14 }}><span className="vlogo-satir"><VarlikLogo code={k} size={22} />{k} <span className="ikincil">{ASSET_META[k].name}</span></span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
                 <input type="range" min={0} max={100} value={alloc[k]} onChange={(e) => setAllocKey(k, Number(e.target.value))} />
               </div>
             ))}

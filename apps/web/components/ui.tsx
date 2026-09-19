@@ -145,3 +145,19 @@ export function Adimlar({ steps, current, error }: { steps: string[]; current: n
     </div>
   );
 }
+
+/**
+ * Varlık logosu — tüm varlıklar aynı boyutta yuvarlak rozet içinde (fildişi zemin, ince sepya çerçeve),
+ * logo rozetin %68'ine sığdırılır; böylece geniş yazı logoları (NVIDIA) ile kare ikonlar (BMW, USDC) hizalı durur.
+ * Dosyalar: public/logo/assets/<KOD>.svg
+ */
+export function VarlikLogo({ code, size = 28 }: { code: string; size?: number }) {
+  return (
+    <span className="vlogo" style={{ width: size, height: size }} aria-hidden="true">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/logo/assets/${code}.svg`} alt="" onError={(e) => { (e.currentTarget.parentElement as HTMLElement).classList.add("vlogo-bos"); e.currentTarget.style.display = "none"; }} />
+      <span className="vlogo-harf">{code.replace(/^h/, "").slice(0, 3)}</span>
+    </span>
+  );
+}
+

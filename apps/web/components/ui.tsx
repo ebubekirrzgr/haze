@@ -147,8 +147,8 @@ export function Adimlar({ steps, current, error }: { steps: string[]; current: n
 }
 
 /**
- * Varlık logosu — tüm varlıklar aynı boyutta yuvarlak rozet içinde (fildişi zemin, ince sepya çerçeve),
- * logo rozetin %68'ine sığdırılır; böylece geniş yazı logoları (NVIDIA) ile kare ikonlar (BMW, USDC) hizalı durur.
+ * Varlık logosu — yalnız sembol (zemin/çerçeve yok, hafif gölge); tüm varlıklar aynı boyutta kutuya sığdırılır,
+ * böylece NVIDIA gözü, Shell pecteni, BMW rondeli ve USDC dairesi hizalı durur.
  * Dosyalar: public/logo/assets/<KOD>.svg
  */
 export function VarlikLogo({ code, size = 28 }: { code: string; size?: number }) {

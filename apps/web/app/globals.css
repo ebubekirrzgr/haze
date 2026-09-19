@@ -56,9 +56,9 @@ input { font: inherit; color: inherit; }
 .blok { margin-top: 18px; }
 .satir { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .satir + .satir { margin-top: 10px; }
-/* Varlık logosu rozeti */
-.vlogo { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; background: rgba(251,248,241,0.92); border: 1px solid rgba(59,50,38,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); overflow: hidden; vertical-align: middle; }
-.vlogo img { width: 68%; height: 68%; object-fit: contain; display: block; }
+/* Varlık logosu — zemin/çerçeve yok, yalnız sembol + yumuşak gölge; tüm varlıklar aynı kutuya sığdırılır */
+.vlogo { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; vertical-align: middle; }
+.vlogo img { width: 92%; height: 92%; object-fit: contain; display: block; filter: drop-shadow(0 2px 3px rgba(59,50,38,0.28)); }
 .vlogo-harf { display: none; font-family: "Space Grotesk", sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; color: var(--sepya); }
 .vlogo-bos .vlogo-harf { display: block; }
 .vlogo-satir { display: inline-flex; align-items: center; gap: 10px; }

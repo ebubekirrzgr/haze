@@ -295,16 +295,84 @@ export function useLang(): LangCtx {
   return c;
 }
 
-/** Dil seçici (TR / EN) */
+/** Basitleştirilmiş SVG bayraklar (emoji bayraklar Windows'ta harf olarak görünür) */
+function Bayrak({ lang, size = 18 }: { lang: Lang; size?: number }) {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", style: { borderRadius: "50%", flex: "none", boxShadow: "0 1px 2px rgba(59,50,38,0.25)" } as const, "aria-hidden": true as const };
+  switch (lang) {
+    case "tr":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="12" fill="#E30A17" />
+          <circle cx="10" cy="12" r="5.2" fill="#fff" />
+          <circle cx="11.3" cy="12" r="4.2" fill="#E30A17" />
+          <path d="M15.6 9.6l.7 2.1h2.2l-1.8 1.3.7 2.1-1.8-1.3-1.8 1.3.7-2.1-1.8-1.3h2.2z" fill="#fff" />
+        </svg>
+      );
+    case "en":
+      return (
+        <svg {...common}>
+          <clipPath id="uk"><circle cx="12" cy="12" r="12" /></clipPath>
+          <g clipPath="url(#uk)">
+            <rect width="24" height="24" fill="#012169" />
+            <path d="M0 0l24 24M24 0L0 24" stroke="#fff" strokeWidth="4" />
+            <path d="M0 0l24 24M24 0L0 24" stroke="#C8102E" strokeWidth="1.6" />
+            <path d="M12 0v24M0 12h24" stroke="#fff" strokeWidth="6" />
+            <path d="M12 0v24M0 12h24" stroke="#C8102E" strokeWidth="3.2" />
+          </g>
+        </svg>
+      );
+    case "pt":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="12" fill="#009C3B" />
+          <path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z" fill="#FFDF00" />
+          <circle cx="12" cy="12" r="3.6" fill="#002776" />
+          <path d="M8.6 11.3c2.3-.6 4.6-.2 6.8 1.1" stroke="#fff" strokeWidth=".7" fill="none" />
+        </svg>
+      );
+    case "es":
+      return (
+        <svg {...common}>
+          <clipPath id="es"><circle cx="12" cy="12" r="12" /></clipPath>
+          <g clipPath="url(#es)">
+            <rect width="24" height="24" fill="#AA151B" />
+            <rect y="6" width="24" height="12" fill="#F1BF00" />
+          </g>
+        </svg>
+      );
+  }
+}
+
+const LANG_NAME: Record<Lang, string> = { tr: "Türkçe", en: "English", pt: "Português", es: "Español" };
+
+/** Dil seçici — bayraklı açılır menü. Menü dışına tıklayınca kapanır. */
 export function DilSecici({ koyu = false }: { koyu?: boolean }) {
   const { lang, setLang } = useLang();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [open]);
   return (
-    <span className="dil" style={koyu ? { color: "#D8CBB2" } : undefined}>
-      {LANGS.map((l) => (
-        <button key={l} className={`dil-btn${lang === l ? " aktif" : ""}`} onClick={() => setLang(l)} aria-pressed={lang === l}>
-          {l.toUpperCase()}
-        </button>
-      ))}
+    <span className={`dil${koyu ? " koyu" : ""}`} onClick={(e) => e.stopPropagation()}>
+      <button className="dil-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
+        <Bayrak lang={lang} />
+        <span>{lang.toUpperCase()}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+      </button>
+      {open && (
+        <ul className="dil-menu cam" role="listbox">
+          {LANGS.map((l) => (
+            <li key={l} role="option" aria-selected={lang === l} className={lang === l ? "aktif" : ""} onClick={() => { setLang(l); setOpen(false); }}>
+              <Bayrak lang={l} />
+              <span>{LANG_NAME[l]}</span>
+              <span className="ikincil" style={{ marginLeft: "auto", fontSize: 11 }}>{l.toUpperCase()}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </span>
   );
 }

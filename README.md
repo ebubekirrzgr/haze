@@ -32,7 +32,7 @@ The result is a card that lets people keep their savings invested while spending
 |---|---|
 | **Onboarding** | A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
 | **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, hUSDY (tokenized treasuries) and hXAU (tokenized gold) with a single passkey approval. |
-| **Card** | Contactless payments authorize in under 500 ms off-chain. The on-chain borrow follows seconds later from an operator queue. |
+| **Card** | Contactless payments are authorized off-chain, in milliseconds from cached positions and about a second on a cold read. The on-chain borrow follows seconds later from an operator queue. |
 | **Cash out** | Withdraw to a bank account in local currency without selling the underlying asset, via path payment and anchor withdrawal. |
 | **Payday** | The salary rule repays outstanding debt and re-collateralizes the rest. |
 
@@ -95,7 +95,7 @@ haze/
 │   └── mock-oracle       Blend PriceFeed-compatible price source
 ├── services/api        Hono service: sponsor, credit engine, card flow, salary rule, prices, indexer, anchor
 ├── packages/stellar    Shared client: SEP-1/10/38/6, transaction builders, credit math, Blend / HazeCredit readers
-├── scripts/            Key generation, asset issuance + SACs, AMM seeding, contract deployment, Blend v2 deployment, demo user
+├── scripts/            Keys, asset issuance + SACs, AMM, contract + Blend v2 deployment, pool liquidity, demo user, Lithic registration, end-to-end rehearsal
 └── docs/brand-kit      HAZE design system
 ```
 
@@ -156,7 +156,7 @@ Implements Blend's `PriceFeed` interface (`lastprice`, `decimals`). Both Blend a
 
 **The vault is its own counterparty.** Blend's `submit` is always called with `from = spender = to = vault`. The pool's token pulls from the vault are pre-authorized with `authorize_as_current_contract` for the exact amount, and the contract tests verify this with real authorization rather than mocks.
 
-**Authorization is off-chain, borrowing is asynchronous.** The card issuer's authorization stream (ASA) is answered in under 500 ms from a credit calculation over cached positions. The on-chain borrow is opened immediately afterwards from an operator queue with retries. This is the only exposure window in the system, and the UI locks withdrawals while an authorization hold is open.
+**Authorization is off-chain, borrowing is asynchronous.** The card issuer's authorization stream (ASA) is answered from a credit calculation over cached positions, in milliseconds when warm and about a second on a cold read, well inside Lithic's 6-second window. The on-chain borrow is opened immediately afterwards from an operator queue with retries. This is the only exposure window in the system, and the UI locks withdrawals while an authorization hold is open.
 
 **One price loop.** The oracle, the market maker's order book and the SEP-38 rate cache are updated in the same tick, so the pool and the DEX never disagree. In demo mode, hUSDY yield is modelled as price appreciation under accelerated time.
 
@@ -196,6 +196,7 @@ BORROWED ──void webhook─────────────────�
 | pnpm | 10.x | `npm install -g pnpm@10` or Corepack |
 | Rust | stable | With the `wasm32v1-none` target |
 | stellar-cli | latest | Only for testnet deployment |
+| cloudflared | latest | Optional: exposes the API for Lithic webhooks and phone demos |
 
 ```bash
 rustup target add wasm32v1-none
@@ -301,7 +302,7 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 | Create account with a passkey | PWA | Sponsored account (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Receive salary | Profile → Employer panel | SEP-38 quote, SEP-6 deposit-exchange, `settle_salary` |
 | Allocate savings | Earn → Allocation | 2× `PathPaymentStrictReceive` + 3× `vault.deposit` |
-| Pay at a café | Terminal → Contactless pay | ASA under 500 ms, then `borrow_for_card` → settlement treasury |
+| Pay at a café | Terminal → Contactless pay | ASA answered off-chain, then `borrow_for_card` → settlement treasury |
 | Cash out from gold | Cash out → From gold | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, path payment to anchor |
 | Payday | Profile → Simulate payday | `settle_salary`: repay, then re-supply the remainder as collateral |
 

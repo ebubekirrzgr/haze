@@ -32,7 +32,7 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 |---|---|
 | **Hesap açma** | Passkey ile hesap oluşur. Rezervler sponsorludur, ücretler fee-bump ile ödenir, deterministik bir kasa dağıtılır. Kullanıcı XLM'e hiç dokunmaz. |
 | **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, hUSDY (tokenize hazine bonosu) ve hXAU (tokenize altın) arasında dağıtılır. |
-| **Kart** | Temassız ödeme zincir dışında 500 ms'nin altında onaylanır. Zincirdeki borç birkaç saniye sonra operatör kuyruğundan açılır. |
+| **Kart** | Temassız ödeme zincir dışında onaylanır: önbellekteki pozisyonlarla milisaniyeler, soğuk okumada yaklaşık bir saniye. Zincirdeki borç birkaç saniye sonra operatör kuyruğundan açılır. |
 | **Nakde çevir** | Altta yatan varlık satılmadan, path payment ve anchor çekimi ile banka hesabına yerel para birimiyle çekim yapılır. |
 | **Maaş günü** | Maaş kuralı açık borcu kapatır, kalanı yeniden teminata ekler. |
 
@@ -95,7 +95,7 @@ haze/
 │   └── mock-oracle       Blend PriceFeed uyumlu fiyat kaynağı
 ├── services/api        Hono servisi: sponsor, kredi motoru, kart akışı, maaş kuralı, fiyatlar, indexer, anchor
 ├── packages/stellar    Ortak istemci: SEP-1/10/38/6, işlem kurucular, kredi hesabı, Blend / HazeCredit okuyucuları
-├── scripts/            Anahtar üretimi, varlık ihracı + SAC, AMM, kontrat dağıtımı, Blend v2 dağıtımı, demo kullanıcı
+├── scripts/            Anahtarlar, varlık ihracı + SAC, AMM, kontrat + Blend v2 dağıtımı, havuz likiditesi, demo kullanıcı, Lithic kaydı, uçtan uca prova
 └── docs/brand-kit      HAZE tasarım sistemi
 ```
 
@@ -156,7 +156,7 @@ Blend'in `PriceFeed` arayüzünü (`lastprice`, `decimals`) uygular. Hem Blend h
 
 **Kasa kendi karşı tarafıdır.** Blend'in `submit` fonksiyonu her zaman `from = spender = to = vault` ile çağrılır. Havuzun kasadan token çekişleri `authorize_as_current_contract` ile tam tutara önceden yetkilendirilir; sözleşme testleri bunu mock değil gerçek yetkiyle doğrular.
 
-**Onay zincir dışı, borç asenkron.** Kart ihraççısının yetkilendirme akışı (ASA), önbellekteki pozisyonlar üzerinden yapılan kredi hesabıyla 500 ms'nin altında yanıtlanır. Zincirdeki borç hemen ardından yeniden denemeli operatör kuyruğundan açılır. Sistemdeki tek risk penceresi budur; açık hold varken arayüz çekimleri kilitler.
+**Onay zincir dışı, borç asenkron.** Kart ihraççısının yetkilendirme akışı (ASA), önbellekteki pozisyonlar üzerinden yapılan kredi hesabıyla yanıtlanır: sıcakken milisaniyeler, soğuk okumada yaklaşık bir saniye; Lithic'in 6 saniyelik penceresinin çok içinde. Zincirdeki borç hemen ardından yeniden denemeli operatör kuyruğundan açılır. Sistemdeki tek risk penceresi budur; açık hold varken arayüz çekimleri kilitler.
 
 **Tek fiyat döngüsü.** Oracle, market maker'ın teklif defteri ve SEP-38 kur önbelleği aynı tikte güncellenir; havuz ile DEX hiçbir zaman farklı fiyat görmez. Demo modunda hUSDY getirisi hızlandırılmış zamanla fiyat artışı olarak modellenir.
 
@@ -196,6 +196,7 @@ BORROWED ──void webhook─────────────────�
 | pnpm | 10.x | `npm install -g pnpm@10` ya da Corepack |
 | Rust | stable | `wasm32v1-none` hedefiyle |
 | stellar-cli | güncel | Yalnızca testnet dağıtımı için |
+| cloudflared | güncel | İsteğe bağlı: Lithic webhook'ları ve telefon demosu için API'yi dışarı açar |
 
 ```bash
 rustup target add wasm32v1-none
@@ -301,7 +302,7 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 | Passkey ile hesap oluştur | PWA | Sponsorlu hesap (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Maaş al | Profil → İşveren paneli | SEP-38 teklif, SEP-6 deposit-exchange, `settle_salary` |
 | Birikimi dağıt | Kazan → Dağılım | 2× `PathPaymentStrictReceive` + 3× `vault.deposit` |
-| Kafede öde | Terminal → Temassız öde | 500 ms altında ASA, ardından `borrow_for_card` → takas hazinesi |
+| Kafede öde | Terminal → Temassız öde | Zincir dışı ASA onayı, ardından `borrow_for_card` → takas hazinesi |
 | Altından nakde çevir | Nakde çevir → Altından | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, anchor'a path payment |
 | Maaş günü | Profil → Maaş günü simülasyonu | `settle_salary`: geri ödeme, kalan yeniden teminata |
 

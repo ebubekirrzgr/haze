@@ -199,6 +199,40 @@ BORROWED ──void webhook─────────────────�
 
 ---
 
+## Teknik belge haritası
+
+| Gereksinim | Bölüm |
+|---|---|
+| Genel mimari | [Mimari](#mimari) |
+| Ana bileşenler ve sorumlulukları | [Depo yerleşimi](#depo-yerleşimi), [Akıllı sözleşmeler](#akıllı-sözleşmeler), [API referansı](#api-referansı) |
+| Stellar entegrasyonları ve protokoller | [Neden Stellar](#neden-stellar) |
+| Tasarım kararları ve ödünleşimler | [Tasarım kararları](#tasarım-kararları), [Ödünleşimler](#ödünleşimler) |
+| Teknik zorluklar ve çözümler | [Teknik zorluklar](#teknik-zorluklar) |
+
+## Ödünleşimler
+
+- **Onay zincir dışı, borç zincirde.** İhraççı altı saniyede cevap ister, Soroban kesinliği beş saniye. HAZE önbellekteki pozisyonlardan cevap verir, borcu birkaç saniye sonra açar. Bedeli: onaylanan tutarın zincirde henüz rezerve edilmediği kısa bir pencere. Üretimde önce zincirde rezervasyon ya da ihraççı penceresinde senkron borç gerekir.
+- **Operatörün belirlediği kur.** `settle_fx` ve `borrow_for_card_asset` USD karşılığını anchor'ın SEP-38 kurunu okuyan operatörden alır. Demo için sözleşme oracle mantığından arınmış kalır; üretimde iki değer de zincir içi oracle ile sınırlanmalıdır.
+- **İki havuz, tek arayüz.** Hedef Blend v2, yedek aynı `submit` arayüzüne sahip minimal HazeCredit. Kasa hiç değişmez, factory yalnızca havuz adresini değiştirir. Bedeli: bakımı yapılacak ikinci bir sözleşme.
+- **İzin listeli sponsorluk.** Kullanıcıda XLM yok; rezerv ve ücretleri HAZE öder. İzin listesi sponsoru musluğa dönüşmekten korur, karşılığında sabit bir işlem kümesi.
+- **Düz depolama yedekli passkey.** WebAuthn PRF anahtarı yerelde şifreler; PRF olmayan tarayıcı görünür demo uyarısıyla düz depolamaya düşer.
+- **Mock varlıklar ve anchor.** hUSDY, hXAU, hisseler ve fiat token'lar hazine tarafından basılır, fiyatlar bottan gelir. Tüm akış bugün testnet'te çalışır; her mock'un adı konmuş bir mainnet karşılığı vardır.
+
+## Teknik zorluklar
+
+| Zorluk | Ne oldu | Çözüm |
+|---|---|---|
+| Simülasyon kaynakları ile yürütme farkı | İşlemler simülasyondan geçip zincirde `resource_limit_exceeded` ile düştü (1332 bayt yazıldı, 1304 bildirildi); simülasyon ile dahil edilme arasında durum değişiyordu. Surge fiyatlamasında 0,001 XLM dahil etme ücreti de reddedildi. | Ortak Soroban istemcisi talimat ve baytları %30, kaynak ücretini 2× şişirir (iade edilebilir kısım döner), 0,01 XLM dahil etme ücreti kullanır, fee-bump'ı iç ücretten hesaplar. |
+| Toplu oracle yazımı | `set_prices` aynı çerçevede varlık başına `require_auth` çağırıyordu; Soroban ikinciyi `Auth, ExistingValue` ile reddetti. | Yetki bir kez, döngüde yalnızca yazım. |
+| Operatör kuyruğu kilidi | Boş bir tur senkron bitip `finally`nin temizlediği bekçiyi çözülmüş bir promise ile eziyordu; sonraki tüm kart borçları `PENDING` kalıyordu. | Gövde bir sonraki microtask'ta başlar, bekçi `finally`de temizlenir; regresyon testi eklendi. |
+| Lithic Auth Stream Access | Kart token'ı iç içe (`card.token`), cevap şeması yalnız sabit `result` kodlarını kabul ediyor, sandbox işlem para birimini bozuyor (TRY → GBP) ve Standard Webhooks ile imzalıyor. | Yük normalizasyonu, sonuç kodu eşlemesi, terminalin simülasyondan önce bıraktığı kart başına para birimi ipucu, iki webhook için `webhook-id`/`webhook-timestamp`/`webhook-signature` doğrulaması. |
+| Testnet'te kendi Blend v2 havuzu | Dağıtım üç şekilde takıldı: fiyat botu aynı admin anahtarıyla imzalayıp sıra numaralarında yarıştı; surge altında düşük ücret; var olan BLND/USDC mock'ları yerel sırayı artırdı. Rezerv yalnızca havuz `Setup` durumundayken eklenebiliyor. | Dağıtım sırasında API kapalı, token adımından sonra hesap sıraları yeniden yüklenir, işlem başına 0,2 XLM, rezerv listesi varlık kaydından üretilir. |
+| İşlem para biriminde borç | TL harcaması lira borcu yaratmalı, ama maaş USDC gelir ve kasa takas yapamaz. | `borrow_for_card_asset` fiat token'ı takas hesabına borçlar; maaş günü hazine fiat'ı kasaya gönderir, `settle_fx` borcu kapatıp SEP-38 kuru + spread kadar USDC teminatı alır. |
+| Nakde çevirme boyutlandırması | Teminatı oracle fiyatıyla çekmek, AMM fiyatı kayınca path payment'ı fonsuz bırakıyordu. | Çekim miktarı DEX yol tahmini + %2. |
+| Cüzdanda XLM yok | Her kullanıcı işlemi ücret ve rezerv ister. | Sponsorlu hesap ve trustline açılışı, her kullanıcı işlemine fee-bump, hesap başına hız limitli sıkı izin listesi. |
+
+---
+
 ## Başlangıç
 
 ### Gereksinimler

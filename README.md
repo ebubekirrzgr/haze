@@ -199,6 +199,40 @@ BORROWED ──void webhook─────────────────�
 
 ---
 
+## Technical documentation map
+
+| Requirement | Section |
+|---|---|
+| Overall architecture | [Architecture](#architecture) |
+| Main components and responsibilities | [Repository layout](#repository-layout), [Smart contracts](#smart-contracts), [API reference](#api-reference) |
+| Stellar integrations and protocols | [Why Stellar](#why-stellar) |
+| Key design decisions and trade-offs | [Design decisions](#design-decisions), [Trade-offs](#trade-offs) |
+| Technical challenges and solutions | [Technical challenges](#technical-challenges) |
+
+## Trade-offs
+
+- **Off-chain authorization, on-chain borrow.** The issuer needs an answer in under six seconds, Soroban finality takes five. HAZE answers from cached positions and borrows a few seconds later. Cost: a short window in which the approved amount is not yet reserved on chain. A production version would reserve on chain first or answer synchronously inside the issuer window.
+- **Operator-trusted FX rate.** `settle_fx` and `borrow_for_card_asset` take the USD equivalent from the operator, which reads the anchor's SEP-38 rate. This keeps the contract free of oracle logic for the demo; in production the contract must bound both values with an on-chain oracle.
+- **Two pools, one interface.** Blend v2 is the target, HazeCredit is a minimal pool with the same `submit` interface. The vault never changes; the factory just points at a different pool. Cost: a second contract to maintain.
+- **Sponsored fees behind an allowlist.** Users hold no XLM, so HAZE pays reserves and fees. The allowlist keeps the sponsor from becoming a faucet, at the cost of a fixed set of permitted operations.
+- **Passkey with plain fallback.** WebAuthn PRF encrypts the key locally; browsers without PRF fall back to plain storage with a visible demo warning.
+- **Mocked assets and anchor.** hUSDY, hXAU, the stocks and the fiat tokens are issued by the treasury; prices come from a bot. This lets the whole flow run on testnet today; every mock has a named mainnet counterpart.
+
+## Technical challenges
+
+| Challenge | What happened | Solution |
+|---|---|---|
+| Simulated resources vs execution | Transactions passed simulation but failed on chain with `resource_limit_exceeded` (1332 bytes written vs 1304 declared) because state changed between simulation and inclusion; surge pricing also rejected 0.001 XLM inclusion fees. | The shared Soroban client pads simulated instructions and bytes by 30% and the resource fee by 2× (refundable part returns), uses a 0.01 XLM inclusion fee, and sizes fee-bumps from the inner fee. |
+| Batch oracle writes | `set_prices` called `require_auth` once per asset in the same frame; Soroban rejects the second call with `Auth, ExistingValue`. | Authorize once, write in a loop. |
+| Operator queue deadlock | An idle drain tick resolved synchronously, and the assignment overwrote the cleared guard with a resolved promise; every later card borrow stayed `PENDING`. | Start the drain body on the next microtask and clear the guard in `finally`; regression test added. |
+| Lithic Auth Stream Access | Card token arrives nested (`card.token`), the response schema accepts only fixed `result` codes, the sandbox rewrites the merchant currency (TRY became GBP) and signs with Standard Webhooks. | Payload normalization, result-code mapping, a per-card currency hint set by the terminal before the simulated authorization, and `webhook-id`/`webhook-timestamp`/`webhook-signature` verification for both webhooks. |
+| Self-hosted Blend v2 on testnet | The deployment stalled three ways: the price bot signed with the same admin key and raced sequence numbers; low fees under surge pricing; existing BLND/USDC mocks bumped the local sequence. Reserves can only be added while the pool is in `Setup`. | Stop the API during deployment, reload account sequences after the token step, 0.2 XLM per operation, reserve list generated from the asset registry so a redeploy carries all reserves. |
+| Debt in the transaction currency | A TRY purchase should create lira debt, but salary arrives in USDC and the vault cannot swap. | `borrow_for_card_asset` borrows the fiat token to the settlement account; on payday the treasury sends fiat to the vault and `settle_fx` repays it, taking USDC collateral at the SEP-38 rate plus spread. |
+| Cash-out sizing | Withdrawing collateral by oracle price left path payments underfunded once the AMM price drifted. | Size the withdrawal from the DEX path estimate plus 2%. |
+| No XLM in the wallet | Every user action needs fees and reserves. | Sponsored account creation with sponsored trustlines, fee-bump on every user transaction, and a strict allowlist with per-account rate limits. |
+
+---
+
 ## Getting started
 
 ### Prerequisites

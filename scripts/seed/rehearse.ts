@@ -7,6 +7,7 @@
  *
  * Sahneler: sponsorlu hesap → create_vault → SEP-10 → kart → maaş (SEP-38 + SEP-6 + settle_salary)
  *           → Kazan'dan çek → dağılım (2× path payment + 3× deposit) → kart harcaması → BORROWED → clearing
+ *           → nakde çevir (hUSDY: vault.withdraw + SEP-38/SEP-6 withdraw-exchange + anchor'a memo'lu path payment)
  */
 import { Asset, Keypair, Networks, TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import {
@@ -21,7 +22,7 @@ import {
 } from "@haze/stellar";
 import { readConfig } from "../lib/common.ts";
 
-const [salaryTryArg = "1000", chargeTryArg = "100"] = process.argv.slice(2);
+const [salaryTryArg = "1000", chargeTryArg = "100", cashoutTryArg = "100"] = process.argv.slice(2);
 const API = process.env.API_URL ?? "http://localhost:8787";
 const cfg = readConfig();
 const soroban = new SorobanClient(cfg.rpcUrl, cfg.networkPassphrase);
@@ -124,18 +125,42 @@ for (const code of ["USDC", "hUSDY", "hXAU"] as const) {
 await post("/rules", { userId: pub, allocation: { USDC: 50, hUSDY: 30, hXAU: 20 } }).catch(() => {});
 
 // 7) kart harcaması → operatör kuyruğu → BORROWED → clearing
-const ch = await post<{ result: string; token: string; usdc: string; haze?: { remainingLimit: string } }>("/terminal/charge", { userId: pub, amountTry: Number(chargeTryArg), merchant: "PROVA", city: "ISTANBUL" });
-log(`✓ ASA ${ch.result} ${chargeTryArg} TL = ${Number(ch.usdc) / 1e7} USDC`);
-if (ch.result !== "APPROVED") throw new Error("ASA onaylamadı");
+// Lithic açıksa yetkilendirme Lithic'e gider ve ASA bize asenkron gelir (yanıtta result yok); kapalıysa ASA cevabı doğrudan döner.
+const ch = await post<{ via: "direct" | "lithic"; result?: string; token: string; usdCents: number; usdc?: string }>("/terminal/charge", { userId: pub, amountTry: Number(chargeTryArg), merchant: "PROVA", city: "ISTANBUL" });
+if (ch.via === "direct") {
+  log(`✓ ASA (direct) ${ch.result} ${chargeTryArg} TL = ${ch.usdCents / 100} USD`);
+  if (ch.result !== "APPROVED") throw new Error("ASA onaylamadı");
+} else log(`✓ Lithic simulate/authorize ${ch.token.slice(0, 8)}… ${chargeTryArg} TL = ${ch.usdCents / 100} USD, ASA bekleniyor`);
 let status = "PENDING";
-for (let i = 0; i < 30 && status === "PENDING"; i++) {
+for (let i = 0; i < 30 && (status === "PENDING" || status === "NONE"); i++) {
   await new Promise((r) => setTimeout(r, 3000));
-  const holds = await get<{ status: string; error?: string | null }[]>(`/users/${pub}/holds`);
-  status = holds[0]?.status ?? "PENDING";
-  if (status === "FAILED") throw new Error(`hold FAILED: ${holds[0]?.error}`);
+  const holds = await get<{ status: string; error?: string | null; lithic_token: string }[]>(`/users/${pub}/holds`);
+  const h = holds.find((x) => x.lithic_token === ch.token);
+  status = h?.status ?? "NONE";
+  if (status === "FAILED" || status === "DECLINED") throw new Error(`hold ${status}: ${h?.error ?? ""}`);
 }
-log(`✓ hold ${status}`);
+if (status === "NONE") throw new Error("ASA isteği gelmedi (Lithic webhook / tünel?)");
+log(`✓ ASA onaylandı, hold ${status}`);
 await post("/terminal/clear", { token: ch.token });
+
+// 8) nakde çevir: hUSDY'den — PWA'daki sıra: teklif → vault.withdraw → hazineye memo'lu path payment (hUSDY → tam USDC) → anchor durumu
+const instr = await post<{ id: string; usdcAmount: string; tryAmount: string; treasury: string; memo: string }>("/cashout/start", { userId: pub, amountTry: Number(cashoutTryArg) });
+const usdcOut = toStroops(Number(instr.usdcAmount).toFixed(7));
+const needHusdy = (Number(instr.usdcAmount) / prices.hUSDY) * 1.01;
+const { tx: cwTx } = await vaultClient.withdraw(pub, sac("hUSDY"), toStroops(needHusdy.toFixed(7)));
+await sponsor(cwTx);
+const estOut = await estimateSendAmount(cfg, asset("hUSDY"), asset("USDC"), usdcOut);
+if (!estOut) throw new Error("hUSDY → USDC yolu yok");
+const ppTx = await buildPathPaymentStrictReceive(cfg, pub, { sendAsset: asset("hUSDY"), sendMax: (estOut.sendAmount * 101n) / 100n, destination: instr.treasury, destAsset: asset("USDC"), destAmount: usdcOut, path: estOut.path, memoId: instr.memo });
+const ppHash = await sponsor(ppTx);
+let st = "pending";
+for (let i = 0; i < 30 && st !== "completed" && st !== "error"; i++) {
+  await new Promise((r) => setTimeout(r, 2000));
+  st = (await get<{ status: string }>(`/cashout/${pub}/${instr.id}`)).status;
+}
+log(`✓ nakde çevir ${cashoutTryArg} TL: withdraw ${needHusdy.toFixed(4)} hUSDY → path payment ${instr.usdcAmount} USDC → anchor (${ppHash.slice(0, 8)}…) durum ${st}`);
+if (st !== "completed") throw new Error(`anchor çekimi tamamlanmadı: ${st}`);
+
 const credit = await get<{ poolMode: string; reserves: { code: string; collateralFloat: number; liabilitiesFloat: number }[]; credit: { availableLimitFloat: number } }>(`/credit/${pub}`);
 console.log(`\nSonuç (${credit.poolMode}):`);
 for (const r of credit.reserves) console.log(`  ${r.code.padEnd(6)} teminat ${r.collateralFloat}  borç ${r.liabilitiesFloat}`);

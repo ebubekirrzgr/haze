@@ -3,7 +3,8 @@
  * Dil desteği: TR, EN, PT (pt-BR), ES. Tarayıcı dilinden algılanır (bilinmeyen dil → EN); seçim localStorage'da (haze.lang) kalır.
  * Kullanım: const { t, lang } = useLang(); t("kart.baslik") · t("x.y", { n: 3 }) → "{n}" yerine 3.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ASSET_META, type AssetCode } from "@haze/stellar/browser";
 import { setFormatLocale } from "./format.ts";
 
@@ -345,25 +346,35 @@ function Bayrak({ lang, size = 18 }: { lang: Lang; size?: number }) {
 
 const LANG_NAME: Record<Lang, string> = { tr: "Türkçe", en: "English", pt: "Português", es: "Español" };
 
-/** Dil seçici — bayraklı açılır menü. Menü dışına tıklayınca kapanır. */
+/**
+ * Dil seçici — bayraklı açılır menü. Menü, cam kartların (backdrop-filter → kendi katman bağlamı) altında
+ * kalmasın diye portal ile body'ye çizilir ve düğmenin konumuna sabitlenir (position: fixed).
+ */
 export function DilSecici({ koyu = false }: { koyu?: boolean }) {
   const { lang, setLang } = useLang();
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const btn = useRef<HTMLButtonElement>(null);
+  const place = useCallback(() => {
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+  }, []);
   useEffect(() => {
     if (!open) return;
+    place();
     const close = () => setOpen(false);
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [open]);
-  return (
-    <span className={`dil${koyu ? " koyu" : ""}`} onClick={(e) => e.stopPropagation()}>
-      <button className="dil-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <Bayrak lang={lang} />
-        <span>{lang.toUpperCase()}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-      </button>
-      {open && (
-        <ul className="dil-menu cam" role="listbox">
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("click", close);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open, place]);
+  const menu = open && typeof document !== "undefined"
+    ? createPortal(
+        <ul className="dil-menu cam" role="listbox" style={{ top: pos.top, right: pos.right }} onClick={(e) => e.stopPropagation()}>
           {LANGS.map((l) => (
             <li key={l} role="option" aria-selected={lang === l} className={lang === l ? "aktif" : ""} onClick={() => { setLang(l); setOpen(false); }}>
               <Bayrak lang={l} />
@@ -371,8 +382,18 @@ export function DilSecici({ koyu = false }: { koyu?: boolean }) {
               <span className="ikincil" style={{ marginLeft: "auto", fontSize: 11 }}>{l.toUpperCase()}</span>
             </li>
           ))}
-        </ul>
-      )}
+        </ul>,
+        document.body,
+      )
+    : null;
+  return (
+    <span className={`dil${koyu ? " koyu" : ""}`}>
+      <button ref={btn} className="dil-btn" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} aria-haspopup="listbox" aria-expanded={open}>
+        <Bayrak lang={lang} />
+        <span>{lang.toUpperCase()}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+      </button>
+      {menu}
     </span>
   );
 }

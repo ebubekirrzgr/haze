@@ -66,7 +66,7 @@ input { font: inherit; color: inherit; }
 .dil { position: relative; display: inline-flex; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; }
 .dil-btn { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 6px; border-radius: 999px; background: rgba(251,248,241,0.55); border: 1px solid rgba(59,50,38,0.14); color: var(--sepya); }
 .dil.koyu .dil-btn { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: var(--krem); }
-.dil-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; min-width: 176px; margin: 0; padding: 6px; list-style: none; border-radius: 16px; font-weight: 500; letter-spacing: 0; }
+.dil-menu { position: fixed; z-index: 1000; min-width: 176px; margin: 0; padding: 6px; list-style: none; border-radius: 16px; font-weight: 500; letter-spacing: 0; }
 .dil-menu li { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 11px; cursor: pointer; color: var(--sepya); font-size: 14px; }
 .dil-menu li:hover { background: rgba(59,50,38,0.06); }
 .dil-menu li.aktif { background: rgba(200,162,74,0.18); }

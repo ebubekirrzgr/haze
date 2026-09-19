@@ -22,6 +22,11 @@ const cfg = {
     hSHEL: { code: "hSHEL", issuer, sac: "" },
     hBMW: { code: "hBMW", issuer, sac: "" },
     hTRY: { code: "hTRY", issuer, sac: "" },
+    hEUR: { code: "hEUR", issuer, sac: "" },
+    hGBP: { code: "hGBP", issuer, sac: "" },
+    hCHF: { code: "hCHF", issuer, sac: "" },
+    hARS: { code: "hARS", issuer, sac: "" },
+    hBRL: { code: "hBRL", issuer, sac: "" },
   },
   haze: { vaultFactory: FACTORY, vaultWasmHash: "", hazeCredit: "", mockOracle: "" },
 } as unknown as HazeConfig;

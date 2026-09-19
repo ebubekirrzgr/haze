@@ -4,9 +4,10 @@
  *
  * hUSDY: bakiye sabit, fiyat zamanla artar. Demo modunda 1 dakika = YIELD_DAYS_PER_MINUTE gün.
  * hXAU, hNVDA, hSHEL, hBMW (RWA): getiri yok; taban fiyat (ASSET_META / <CODE>_USD env) + küçük rastgele yürüyüş.
+ * Fiat rezervler (hTRY, hEUR, …): hTRY = 1 / SEP-38 USD/TRY kuru; diğerleri taban fiyat + çok küçük yürüyüş (gerçek FX beslemesi yok).
  */
 import { Asset, Keypair, Operation, TransactionBuilder, BASE_FEE, Horizon } from "@stellar/stellar-sdk";
-import { AnchorClient, ASSET_META, COLLATERAL_CODES, RWA_CODES, baseUsdOf, fromStroops, isYieldByPrice, toStroops, type CollateralCode, type HazeConfig, type RwaCode } from "@haze/stellar";
+import { AnchorClient, ASSET_META, FIAT_CODES, RESERVE_CODES, RWA_CODES, baseUsdOf, fromStroops, isYieldByPrice, toStroops, type FiatCode, type HazeConfig, type ReserveCode, type RwaCode } from "@haze/stellar";
 import type { ChainOps } from "../chain.ts";
 import type { Db } from "../db.ts";
 
@@ -28,7 +29,7 @@ export class PriceService {
   private startedAt = Date.now();
   private husdyStart = toStroops("1");
   /** rastgele yürüyüşlü RWA fiyatları (SAC → 7 ondalık) */
-  private walk: Partial<Record<RwaCode, bigint>> = {};
+  private walk: Partial<Record<RwaCode | FiatCode, bigint>> = {};
   private anchor: AnchorClient;
   private fxAt = 0;
   private timer?: NodeJS.Timeout;
@@ -39,7 +40,7 @@ export class PriceService {
     const saved = d.db.get("prices.startedAt");
     if (saved) this.startedAt = Number(saved);
     else d.db.set("prices.startedAt", String(this.startedAt));
-    for (const code of RWA_CODES) {
+    for (const code of [...RWA_CODES, ...FIAT_CODES]) {
       if (isYieldByPrice(code)) continue;
       const base = code === "hXAU" && d.xauBase ? d.xauBase : toStroops(baseUsdOf(code, process.env).toFixed(7));
       const savedPrice = d.cfg.assets[code].sac ? d.db.price(d.cfg.assets[code].sac) : undefined;
@@ -63,11 +64,14 @@ export class PriceService {
     return this.d.husdyApy;
   }
 
-  /** Kod → 7 ondalık USD fiyatı (COLLATERAL_CODES sırasıyla) */
-  byCode(): Record<CollateralCode, bigint> {
-    const out = {} as Record<CollateralCode, bigint>;
-    for (const code of COLLATERAL_CODES) {
-      out[code] = code === "USDC" ? toStroops("1") : isYieldByPrice(code) ? this.husdyPrice() : (this.walk[code as RwaCode] ?? toStroops(ASSET_META[code].baseUsd.toFixed(7)));
+  /** Kod → 7 ondalık USD fiyatı (RESERVE_CODES sırasıyla) */
+  byCode(): Record<ReserveCode, bigint> {
+    const out = {} as Record<ReserveCode, bigint>;
+    for (const code of RESERVE_CODES) {
+      if (code === "USDC") out[code] = toStroops("1");
+      else if (isYieldByPrice(code)) out[code] = this.husdyPrice();
+      else if (code === "hTRY" && this.usdTry) out[code] = BigInt(Math.round(1e14 / Number(this.usdTry))); // 1 TRY = 1/kur USD
+      else out[code] = this.walk[code as RwaCode | FiatCode] ?? toStroops(ASSET_META[code].baseUsd.toFixed(7));
     }
     return out;
   }
@@ -76,7 +80,7 @@ export class PriceService {
   current(): Record<string, bigint> {
     const out: Record<string, bigint> = {};
     for (const [code, p] of Object.entries(this.byCode())) {
-      const sac = this.d.cfg.assets[code as CollateralCode].sac;
+      const sac = this.d.cfg.assets[code as ReserveCode].sac;
       if (sac) out[sac] = p;
     }
     return out;
@@ -84,8 +88,8 @@ export class PriceService {
 
   async tick(): Promise<void> {
     // RWA'larda küçük rastgele yürüyüş (±0,05%)
-    for (const code of Object.keys(this.walk) as RwaCode[]) {
-      const drift = 1 + (Math.random() - 0.5) * 0.001;
+    for (const code of Object.keys(this.walk) as (RwaCode | FiatCode)[]) {
+      const drift = 1 + (Math.random() - 0.5) * (ASSET_META[code].kind === "fiat" ? 0.0002 : 0.001);
       this.walk[code] = BigInt(Math.round(Number(this.walk[code]) * drift));
     }
     const prices = this.current();
@@ -119,10 +123,9 @@ export class PriceService {
     const existing = await server.offers().forAccount(mm.publicKey()).limit(50).call();
     const b = new TransactionBuilder(account, { fee: (Number(BASE_FEE) * 20).toString(), networkPassphrase: cfg.networkPassphrase });
 
-    const pairs: { code: RwaCode | "hTRY"; priceUsd: number; size: string }[] = [
-      ...RWA_CODES.map((code) => ({ code, priceUsd: cfg.assets[code].sac ? Number(prices[cfg.assets[code].sac] ?? 0n) / 1e7 : 0, size: ASSET_META[code].mmSize })),
-      { code: "hTRY", priceUsd: this.usdTry ? 1 / (Number(this.usdTry) / 1e7) : 0, size: ASSET_META.hTRY.mmSize },
-    ];
+    const pairs: { code: RwaCode | FiatCode; priceUsd: number; size: string }[] = [...RWA_CODES, ...FIAT_CODES]
+      .filter((code) => cfg.assets[code]?.issuer)
+      .map((code) => ({ code, priceUsd: cfg.assets[code].sac ? Number(prices[cfg.assets[code].sac] ?? 0n) / 1e7 : 0, size: ASSET_META[code].mmSize }));
     // Alış (USDC satan) emirleri hazinenin USDC bakiyesine sığdırılır: bakiyenin MM_USDC_SHARE kadarı
     // (varsayılan %25) teklif defterine ayrılır, kalanı demo kullanıcı / havuz likiditesi için serbest kalır.
     // Aksi halde toplam emir bakiyeyi aşar ve Horizon işlemi op_underfunded ile reddeder.
@@ -197,7 +200,7 @@ export class PriceService {
   }
 
   toJson() {
-    const byCode = Object.fromEntries(Object.entries(this.byCode()).map(([c, p]) => [c, Number(p) / 1e7])) as Record<CollateralCode, number>;
+    const byCode = Object.fromEntries(Object.entries(this.byCode()).map(([c, p]) => [c, Number(p) / 1e7])) as Record<ReserveCode, number>;
     return {
       ...byCode,
       USDTRY: this.usdTry ? Number(this.usdTry) / 1e7 : null,
@@ -205,7 +208,7 @@ export class PriceService {
       daysPerMinute: this.d.daysPerMinute,
       acceleratedDays: this.acceleratedYears() * 365,
       startedAt: this.startedAt,
-      note: "Demo: hUSDY fiyatı hızlandırılmış zamanla artar; hXAU ve tokenize hisseler tabana rastgele yürüyüş.",
+      note: "Demo: hUSDY fiyatı hızlandırılmış zamanla artar; hXAU ve tokenize hisseler tabana rastgele yürüyüş; fiat token'lar sabit taban (hTRY: SEP-38 kuru).",
     };
   }
 }

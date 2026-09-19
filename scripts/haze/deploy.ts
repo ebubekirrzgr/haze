@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { COLLATERAL_CODES, DEMO_RESERVES, baseUsdOf } from "@haze/stellar";
+import { RESERVE_CODES, DEMO_RESERVES, baseUsdOf } from "@haze/stellar";
 import { ROOT, hasStellarCli, keyFromEnv, readConfig, stellar, writeConfig } from "../lib/common.ts";
 
 if (!hasStellarCli()) throw new Error("stellar-cli gerekli");
@@ -43,17 +43,17 @@ if (!cfg.haze.mockOracle) {
   cfg.haze.mockOracle = stellar(["contract", "deploy", "--wasm", resolve(wasmDir, "mock_oracle.wasm"), ...src(oracleAdmin), ...net, "--", "--admin", oracleAdmin.publicKey()]).split("\n").pop()!.trim();
 }
 console.log(`✓ MockOracle ${cfg.haze.mockOracle}`);
-for (const c of COLLATERAL_CODES) if (!cfg.assets[c]?.sac) throw new Error(`${c} SAC yok — önce: pnpm --filter @haze/scripts assets`);
-const prices: Record<string, string> = Object.fromEntries(COLLATERAL_CODES.map((c) => [c, String(Math.round(baseUsdOf(c, process.env) * 1e7))]));
-const assetsJson = JSON.stringify(COLLATERAL_CODES.map((c) => ({ Stellar: cfg.assets[c].sac })));
-const pricesJson = JSON.stringify(COLLATERAL_CODES.map((c) => prices[c]));
+for (const c of RESERVE_CODES) if (!cfg.assets[c]?.sac) throw new Error(`${c} SAC yok — önce: pnpm --filter @haze/scripts assets`);
+const prices: Record<string, string> = Object.fromEntries(RESERVE_CODES.map((c) => [c, String(Math.round(baseUsdOf(c, process.env) * 1e7))]));
+const assetsJson = JSON.stringify(RESERVE_CODES.map((c) => ({ Stellar: cfg.assets[c].sac })));
+const pricesJson = JSON.stringify(RESERVE_CODES.map((c) => prices[c]));
 stellar(["contract", "invoke", "--id", cfg.haze.mockOracle, ...src(oracleAdmin), ...net, "--", "set_prices", "--assets", assetsJson, "--prices", pricesJson]);
 console.log("✓ oracle başlangıç fiyatları yazıldı");
 
 // 3) HazeCredit (yedek havuz)
 if (!cfg.haze.hazeCredit) {
   cfg.haze.hazeCredit = stellar(["contract", "deploy", "--wasm", resolve(wasmDir, "haze_credit.wasm"), ...src(oracleAdmin), ...net, "--", "--admin", oracleAdmin.publicKey(), "--oracle", cfg.haze.mockOracle]).split("\n").pop()!.trim();
-  for (const c of COLLATERAL_CODES) {
+  for (const c of RESERVE_CODES) {
     const r = DEMO_RESERVES[c];
     stellar(["contract", "invoke", "--id", cfg.haze.hazeCredit, ...src(oracleAdmin), ...net, "--", "add_reserve", "--asset", cfg.assets[c].sac, "--c_factor", String(Math.round(r.c_factor * 1e7)), "--l_factor", String(Math.round(r.l_factor * 1e7)), "--borrow_rate_bps", c === "USDC" ? "400" : "0"]);
   }

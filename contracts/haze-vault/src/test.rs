@@ -463,3 +463,61 @@ fn positions_view_reads_pool() {
     assert_eq!(pos.collateral.get(0), Some(10_0000000));
     assert_eq!(f.vault.get_config().owner, f.owner);
 }
+
+#[test]
+fn owner_can_borrow_and_repay_any_reserve() {
+    // Fiat rezerv modeli: hUSDY havuzda borç alınabilir (l_factor 0,1); sahip USDC teminatına karşı hUSDY borçlanır.
+    let f = setup();
+    let e = &f.env;
+    // Havuza borç verilecek hUSDY likiditesi (fiat rezervlerde hazine sağlar)
+    e.mock_all_auths();
+    StellarAssetClient::new(e, &f.husdy).mint(&f.treasury, &1_000_0000000);
+    f.pool.submit(
+        &f.treasury,
+        &f.treasury,
+        &f.treasury,
+        &vec![e, PoolRequest { request_type: REQ_SUPPLY, address: f.husdy.clone(), amount: 1_000_0000000 }],
+    );
+    e.set_auths(&[]);
+    owner_deposit(&f, &f.usdc, 1_000_0000000);
+    let husdy = TokenClient::new(e, &f.husdy);
+    let before = husdy.balance(&f.owner);
+
+    let pos = f
+        .vault
+        .mock_auths(&[MockAuth {
+            address: &f.owner,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "borrow_asset",
+                args: (f.husdy.clone(), 20_0000000i128).into_val(e),
+                sub_invokes: &[],
+            },
+        }])
+        .borrow_asset(&f.husdy, &20_0000000);
+    assert_eq!(pos.liabilities.get(1), Some(20_0000000));
+    assert_eq!(husdy.balance(&f.owner) - before, 20_0000000);
+
+    // Fazlasıyla öde: havuz yalnızca borcu alır, artan sahibe döner
+    let pos = f
+        .vault
+        .mock_auths(&[MockAuth {
+            address: &f.owner,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "repay_asset",
+                args: (f.husdy.clone(), 25_0000000i128).into_val(e),
+                sub_invokes: &[MockAuthInvoke {
+                    contract: &f.husdy,
+                    fn_name: "transfer",
+                    args: (f.owner.clone(), f.vault_id.clone(), 25_0000000i128).into_val(e),
+                    sub_invokes: &[],
+                }],
+            },
+        }])
+        .repay_asset(&f.husdy, &25_0000000);
+    assert_eq!(pos.liabilities.get(1).unwrap_or(0), 0);
+    assert_eq!(husdy.balance(&f.owner), before);
+    assert_eq!(husdy.balance(&f.vault_id), 0);
+}
+

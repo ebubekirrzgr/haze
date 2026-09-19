@@ -6,7 +6,7 @@
  *   pnpm --filter @haze/scripts amm [usdcPerPool=100] [usdTry=41]
  */
 import { Asset, LiquidityPoolAsset, LiquidityPoolFeeV18, Operation, getLiquidityPoolId } from "@stellar/stellar-sdk";
-import { ASSET_META, RWA_CODES, baseUsdOf, type RwaCode } from "@haze/stellar";
+import { ASSET_META, FIAT_CODES, RWA_CODES, baseUsdOf, type FiatCode, type RwaCode } from "@haze/stellar";
 import { horizon, keyFromEnv, readConfig, submitClassic } from "../lib/common.ts";
 
 const [usdcPerPoolArg = "100", usdTryArg = "41"] = process.argv.slice(2);
@@ -17,10 +17,7 @@ const cfg = readConfig();
 const treasury = keyFromEnv("TREASURY_SECRET");
 const USDC = new Asset(cfg.assets.USDC.code, cfg.assets.USDC.issuer);
 
-const pools: { code: RwaCode | "hTRY"; priceUsd: number }[] = [
-  ...RWA_CODES.map((code) => ({ code, priceUsd: baseUsdOf(code, process.env) })),
-  { code: "hTRY", priceUsd: 1 / usdTry },
-];
+const pools: { code: RwaCode | FiatCode; priceUsd: number }[] = [...RWA_CODES, ...FIAT_CODES].map((code) => ({ code, priceUsd: code === "hTRY" ? 1 / usdTry : baseUsdOf(code, process.env) }));
 void ASSET_META;
 
 const server = horizon(cfg);

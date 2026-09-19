@@ -4,7 +4,7 @@
  * Kazan'a eklenen her varlık HazeVault üzerinden Blend'e teminat olarak gider; getiri ve limit aynı pozisyondan.
  */
 import { useEffect, useState } from "react";
-import { ASSET_META, COLLATERAL_CODES, RWA_CODES, toStroops, type AssetCode, type CollateralCode, type RwaCode } from "@haze/stellar/browser";
+import { ASSET_META, BORROWABLE_CODES, COLLATERAL_CODES, RWA_CODES, toStroops, type AssetCode, type CollateralCode, type FiatCode, type RwaCode } from "@haze/stellar/browser";
 import { useLang } from "@/lib/i18n.tsx";
 import { Adimlar, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
@@ -21,7 +21,8 @@ export default function Kazan() {
   const { t, assetName, assetBlurb } = useLang();
   const live = useLiveYield(s.credit, s.prices);
   const [balances, setBalances] = useState<Record<string, number>>({});
-  const [tab, setTab] = useState<"ekle" | "dagit" | "cek">("ekle");
+  const [tab, setTab] = useState<"ekle" | "dagit" | "cek" | "borc">("ekle");
+  const [borrowCode, setBorrowCode] = useState<"USDC" | FiatCode>("hTRY");
   const [amount, setAmount] = useState("");
   const [alloc, setAlloc] = useState<Record<Code, number>>(DEFAULT_ALLOC);
   const [withdrawCode, setWithdrawCode] = useState<Code>("hXAU");
@@ -116,6 +117,30 @@ export default function Kazan() {
     );
   };
 
+  /** Borç al: USDC ise vault.borrow, fiat ise vault.borrow_asset — seçilen para birimi cüzdana gelir */
+  const borc = () =>
+    run([t("genel.passkeyImzala"), t("kazan.adimBorrow", { code: borrowCode })], async (next) => {
+      const ch = await ensure();
+      next();
+      if (borrowCode === "USDC") await ch.borrow(vault, toStroops(amt.toFixed(7)));
+      else await ch.borrowAsset(vault, borrowCode, toStroops(amt.toFixed(7)));
+      await s.refresh();
+      await loadBalances();
+    });
+  const ode = () =>
+    run([t("genel.passkeyImzala"), t("kazan.adimRepay", { code: borrowCode })], async (next) => {
+      const ch = await ensure();
+      next();
+      if (borrowCode === "USDC") await ch.repay(vault, toStroops(amt.toFixed(7)));
+      else await ch.repayAsset(vault, borrowCode, toStroops(amt.toFixed(7)));
+      await s.refresh();
+      await loadBalances();
+    });
+  const borrowables = BORROWABLE_CODES.filter((c) => c === "USDC" || s.config?.assets?.[c]?.issuer);
+  const debts = (s.credit?.reserves ?? []).filter((r) => r.liabilitiesFloat > 0);
+  const borrowPrice = s.prices?.[borrowCode] ?? ASSET_META[borrowCode].baseUsd;
+  const limitUsd = s.credit?.credit.availableLimitFloat ?? 0;
+
   const cek = () =>
     run([t("genel.passkeyImzala"), t("kazan.adimWithdraw", { code: withdrawCode })], async (next) => {
       const ch = await ensure();
@@ -169,8 +194,8 @@ export default function Kazan() {
       </div>
 
       <div className="blok cipler">
-        {(["ekle", "dagit", "cek"] as const).map((tb) => (
-          <button key={tb} className={`cip${tab === tb ? " aktif" : ""}`} onClick={() => setTab(tb)}>{{ ekle: t("kazan.tabEkle"), dagit: t("kazan.tabDagit"), cek: t("kazan.tabCek") }[tb]}</button>
+        {(["ekle", "dagit", "cek", "borc"] as const).map((tb) => (
+          <button key={tb} className={`cip${tab === tb ? " aktif" : ""}`} onClick={() => setTab(tb)}>{{ ekle: t("kazan.tabEkle"), dagit: t("kazan.tabDagit"), cek: t("kazan.tabCek"), borc: t("kazan.tabBorc") }[tb]}</button>
         ))}
       </div>
 
@@ -211,6 +236,30 @@ export default function Kazan() {
           </>
         )}
       </div>
+      {tab === "borc" && (
+        <div className="blok cam kart">
+          <div className="etiket" style={{ fontSize: 12 }}>{t("kazan.borcBaslik")}</div>
+          <div className="cipler" style={{ marginTop: 8 }}>
+            {borrowables.map((k) => <button key={k} className={`cip${borrowCode === k ? " aktif" : ""}`} onClick={() => setBorrowCode(k)}>{k}</button>)}
+          </div>
+          <div className="satir" style={{ fontSize: 14, marginTop: 10 }}><span className="ikincil">{assetName(borrowCode)}</span><span className="num">1 {borrowCode} ≈ {fmtUsd(borrowPrice, borrowPrice < 0.01 ? 4 : 2)}</span></div>
+          <div className="satir" style={{ fontSize: 14 }}><span className="ikincil">{t("kazan.cuzdan")}</span><span className="num">{fmtNum(balances[borrowCode] ?? 0, ASSET_META[borrowCode].displayDecimals)} {borrowCode}</span></div>
+          <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder={borrowCode} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <div className="ikincil" style={{ fontSize: 13, marginTop: 8 }}>≈ {fmtUsd((amt || 0) * borrowPrice)} · {t("kazan.borcNot", { limit: fmtUsd(limitUsd) })}</div>
+          <div className="btn-satir" style={{ marginTop: 12 }}>
+            <button className="btn btn-kucuk btn-altin" disabled={busy || !(amt > 0) || amt * borrowPrice > limitUsd} onClick={borc}>{t("kazan.borcBtn", { code: borrowCode })}</button>
+            <button className="btn btn-kucuk btn-sepya" disabled={busy || !(amt > 0) || amt > (balances[borrowCode] ?? 0)} onClick={ode}>{t("kazan.odeBtn", { code: borrowCode })}</button>
+          </div>
+          <div className="etiket" style={{ fontSize: 12, marginTop: 16 }}>{t("kazan.borclar")}</div>
+          {debts.length === 0 && <div className="ikincil" style={{ fontSize: 13, marginTop: 6 }}>{t("kazan.borcYok")}</div>}
+          {debts.map((r) => (
+            <div key={r.code} className="satir" style={{ fontSize: 14, marginTop: 6 }}>
+              <span className="vlogo-satir"><VarlikLogo code={r.code} size={22} />{r.code} <span className="ikincil">{assetName(r.code)}</span></span>
+              <span className="num">{fmtNum(r.liabilitiesFloat, ASSET_META[r.code as AssetCode]?.displayDecimals ?? 2)} · {fmtUsd(r.liabilitiesFloat * r.priceFloat)}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {steps.length > 0 && <Adimlar steps={steps} current={step} error={error} />}
     </Sahne>
   );

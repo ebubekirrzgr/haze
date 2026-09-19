@@ -1,4 +1,4 @@
-import type { AssetCode, CollateralCode } from "@haze/stellar/browser";
+import type { AssetCode, ReserveCode } from "@haze/stellar/browser";
 /** haze-api istemcisi */
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 
@@ -74,7 +74,7 @@ export interface Notification {
   data: string | null;
   created_at: number;
 }
-export type Prices = Record<CollateralCode, number> & {
+export type Prices = Record<ReserveCode, number> & {
   USDTRY: number | null;
   husdyApy: number;
   daysPerMinute: number;

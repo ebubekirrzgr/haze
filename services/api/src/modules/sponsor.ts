@@ -93,7 +93,7 @@ function checkInvoke(op: Operation.InvokeHostFunction, cfg: HazeConfig, source: 
     return { ok: true };
   }
   if (vault && contractId === vault) {
-    const ownerFns = new Set(["deposit", "withdraw", "borrow", "repay", "set_daily_limit", "set_frozen"]);
+    const ownerFns = new Set(["deposit", "withdraw", "borrow", "repay", "borrow_asset", "repay_asset", "set_daily_limit", "set_frozen"]);
     if (!ownerFns.has(method)) return { ok: false, reason: `vault: ${method} not allowed via sponsor` };
     return { ok: true };
   }

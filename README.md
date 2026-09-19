@@ -31,7 +31,7 @@ The result is a card that lets people keep their savings invested while spending
 | Screen | What happens |
 |---|---|
 | **Onboarding** | Interface in Turkish, English, Portuguese or Spanish (auto-detected, switchable on the profile page). A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
-| **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, tokenized treasuries, gold and stocks (NVIDIA, Shell, BMW) with a single passkey approval. |
+| **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, tokenized treasuries, gold and stocks (NVIDIA, Shell, BMW) with a single passkey approval. The Borrow tab lends fiat tokens (TRY, EUR, GBP, CHF, ARS, BRL) against that collateral. |
 | **Card** | Contactless payments are authorized off-chain, in milliseconds from cached positions and about a second on a cold read. The on-chain borrow follows seconds later from an operator queue. |
 | **Cash out** | Withdraw to a bank account in local currency without selling the underlying asset, via path payment and anchor withdrawal. |
 | **Payday** | The salary rule repays outstanding debt and re-collateralizes the rest. |
@@ -46,7 +46,10 @@ The result is a card that lets people keep their savings invested while spending
 | `hNVDA` | Tokenized NVIDIA stock | Equity collateral | 0.65 |
 | `hSHEL` | Tokenized Shell stock | Equity collateral | 0.70 |
 | `hBMW` | Tokenized BMW stock | Equity collateral | 0.70 |
-| `hTRY` | Tokenized Turkish lira | On/off-ramp settlement leg | — |
+| `hTRY` | Tokenized Turkish lira | Borrowable fiat reserve, on/off-ramp leg | 0 (borrow factor 0.85) |
+| `hEUR` `hGBP` `hCHF` `hARS` `hBRL` | Tokenized euro, pound, franc, Argentine peso, Brazilian real | Borrowable fiat reserves | 0 (borrow factor 0.85) |
+
+Fiat tokens are **borrow-only** reserves: they never count as collateral, but a user can borrow them against USD-denominated collateral (`vault.borrow_asset`) and repay in kind (`vault.repay_asset`). Dollar collateral, lira debt: as the lira weakens the debt shrinks in dollar terms, so the FX risk sits with the pool's fiat suppliers rather than the borrower. hTRY is priced from the anchor's SEP-38 USD/TRY rate; the other fiat prices are static demo bases with a tiny random walk.
 
 The asset set is defined once in [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) (`ASSET_META`): name, kind, base price, risk parameters, issuance and demo amounts. Issuance, AMM seeding, pool reserves, the price bot, the market maker and the PWA all derive from that registry, so adding another real-world asset is a one-line change plus a redeploy of the pool reserves.
 
@@ -132,6 +135,7 @@ One vault per user. The **owner** is the user's Stellar account. The **operator*
 | `deposit(asset, amount)` | Owner | Pull asset from owner and supply as collateral |
 | `withdraw(asset, amount)` | Owner | Withdraw collateral to owner; reverts if the position becomes unhealthy |
 | `borrow(amount)` | Owner | Borrow USDC against collateral and send to owner |
+| `borrow_asset(asset, amount)` / `repay_asset(asset, amount)` | Owner | Borrow or repay any pool reserve (fiat tokens); excess repayment is returned |
 | `repay(amount)` | Owner | Repay debt with owner's USDC; any excess is re-supplied as collateral |
 | `set_daily_limit(limit)` / `set_frozen(bool)` | Owner | Card controls enforced on-chain |
 | `borrow_for_card(amount, auth_id)` | Operator | Borrow USDC for a card authorization and transfer to the settlement treasury. Idempotent on `auth_id` (SHA-256 of the issuer authorization token). Enforces daily limit and freeze. |
@@ -237,7 +241,7 @@ pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8   # ~60 USDC per round f
 pnpm --filter @haze/scripts assets        # issue hUSDY / hXAU / hTRY, deploy 4 SACs
 pnpm --filter @haze/scripts haze:deploy   # build wasm, deploy MockOracle, HazeCredit, VaultFactory
 pnpm --filter @haze/scripts amm           # seed USDC/hUSDY, USDC/hXAU, USDC/hTRY liquidity pools
-pnpm --filter @haze/scripts pool:supply 200   # treasury supplies USDC liquidity to HazeCredit (borrows are paid from the pool balance)
+pnpm --filter @haze/scripts pool:supply all   # treasury supplies USDC + every fiat reserve to the active pool (borrows are paid from the pool balance)
 pnpm dev:api                              # price bot starts updating oracle + order book
 pnpm --filter @haze/scripts demo-user     # sponsored account, vault, collateral, allowance, card, anchor JWT
 pnpm --filter @haze/scripts rehearse      # end-to-end smoke test of every client flow with a throwaway key (see below)

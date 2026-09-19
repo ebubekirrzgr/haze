@@ -237,6 +237,72 @@ impl HazeVault {
         pos
     }
 
+    /// Teminata karşı herhangi bir havuz rezervini (ör. hTRY, hEUR gibi fiat token'lar) borç alır ve
+    /// sahibine gönderir. Havuz, rezerv borç alınabilir değilse ya da sağlık faktörü bozulursa reddeder.
+    pub fn borrow_asset(env: Env, asset: Address, amount: i128) -> Positions {
+        let cfg = Self::config(&env);
+        cfg.owner.require_auth();
+        assert!(amount > 0, "amount must be positive");
+        Self::bump(&env);
+        let me = env.current_contract_address();
+        let pos = Self::submit(
+            &env,
+            &cfg,
+            vec![
+                &env,
+                Request {
+                    request_type: REQ_BORROW,
+                    address: asset.clone(),
+                    amount,
+                },
+            ],
+        );
+        token::Client::new(&env, &asset).transfer(&me, &cfg.owner, &amount);
+        VaultAction {
+            action: Symbol::new(&env, "borrow"),
+            asset,
+            amount,
+        }
+        .publish(&env);
+        pos
+    }
+
+    /// `asset` cinsinden borcu sahibin bakiyesiyle öder. Havuz borçtan fazlasını almaz; artan tutar
+    /// (fiat rezervler teminat sayılmadığı için) sahibine geri gönderilir.
+    pub fn repay_asset(env: Env, asset: Address, amount: i128) -> Positions {
+        let cfg = Self::config(&env);
+        cfg.owner.require_auth();
+        assert!(amount > 0, "amount must be positive");
+        Self::bump(&env);
+        let me = env.current_contract_address();
+        let tok = token::Client::new(&env, &asset);
+        tok.transfer(&cfg.owner, &me, &amount);
+        Self::authorize_pool_pull(&env, &cfg, &asset, amount);
+        let pos = Self::submit(
+            &env,
+            &cfg,
+            vec![
+                &env,
+                Request {
+                    request_type: REQ_REPAY,
+                    address: asset.clone(),
+                    amount,
+                },
+            ],
+        );
+        let leftover = tok.balance(&me);
+        if leftover > 0 {
+            tok.transfer(&me, &cfg.owner, &leftover);
+        }
+        VaultAction {
+            action: Symbol::new(&env, "repay"),
+            asset,
+            amount: amount - leftover,
+        }
+        .publish(&env);
+        pos
+    }
+
     /// Sahip USDC'siyle borç öder. Borçtan fazlası havuz tarafından alınmaz; artan vault'ta kalır
     /// ve teminata eklenir.
     pub fn repay(env: Env, amount: i128) -> Positions {

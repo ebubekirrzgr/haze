@@ -21,10 +21,10 @@ fi
 cp "$HERE/haze-mock.ts" "$WORK/src/v2/testing-scripts/haze-mock.ts"
 # Rezerv listesi (COLLATERAL_CODES sırası) — ASSET_META'dan üretilir
 RESERVES="$(node --experimental-transform-types -e '
-import { COLLATERAL_CODES, ASSET_META, baseUsdOf } from "@haze/stellar";
+import { RESERVE_CODES, ASSET_META, baseUsdOf } from "@haze/stellar";
 import { readFileSync } from "node:fs";
 const cfg = JSON.parse(readFileSync(process.argv[1], "utf8"));
-console.log(COLLATERAL_CODES.map((c) => { const m = ASSET_META[c]; const r = m.reserve; return [c, cfg.assets[c].sac, baseUsdOf(c, process.env), r.c_factor, r.l_factor, r.util, r.max_util].join(":"); }).join(";"));
+console.log(RESERVE_CODES.map((c) => { const m = ASSET_META[c]; const r = m.reserve; return [c, cfg.assets[c].sac, baseUsdOf(c, process.env), r.c_factor, r.l_factor, r.util, r.max_util].join(":"); }).join(";"));
 ' "$ROOT/testnet.contracts.json")"
 [ -n "$RESERVES" ] || { echo "rezerv listesi üretilemedi"; exit 1; }
 cat > "$WORK/.env" <<EOF

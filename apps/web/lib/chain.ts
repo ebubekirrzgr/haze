@@ -117,6 +117,14 @@ export class Chain {
     const { tx } = await this.vault(vault).repay(this.pub, amount);
     return this.signAndSponsor(tx);
   }
+  async borrowAsset(vault: string, code: AssetCode, amount: bigint) {
+    const { tx } = await this.vault(vault).borrowAsset(this.pub, this.sac(code), amount);
+    return this.signAndSponsor(tx);
+  }
+  async repayAsset(vault: string, code: AssetCode, amount: bigint) {
+    const { tx } = await this.vault(vault).repayAsset(this.pub, this.sac(code), amount);
+    return this.signAndSponsor(tx);
+  }
   async setFrozen(vault: string, frozen: boolean) {
     const { tx } = await this.vault(vault).setFrozen(this.pub, frozen);
     return this.signAndSponsor(tx);

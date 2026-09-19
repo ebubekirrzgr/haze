@@ -9,7 +9,7 @@ export function yieldRates(credit: CreditView, prices?: Prices) {
   const accel = (prices?.daysPerMinute ?? 1) * 1440; // 1 dk = N gün → saniye çarpanı
   let valuePerYear = 0;
   let collateralValue = 0;
-  const rows = credit.reserves.map((r) => {
+  const rows = credit.reserves.filter((r) => ASSET_META[r.code as AssetCode]?.kind !== "fiat").map((r) => {
     const value = r.collateralFloat * r.priceFloat;
     // hUSDY: fiyat artışı = getiri · altın ve hisseler: getiri yok (değer koruma) · USDC: Blend supply faizi
     const kind = ASSET_META[r.code as AssetCode]?.kind;

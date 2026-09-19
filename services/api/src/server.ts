@@ -12,6 +12,7 @@ if (fake) {
   env.cfg.assets.hNVDA.sac = "CHNVDA";
   env.cfg.assets.hSHEL.sac = "CHSHEL";
   env.cfg.assets.hBMW.sac = "CHBMW";
+  for (const c of ["hTRY", "hEUR", "hGBP", "hCHF", "hARS", "hBRL"] as const) env.cfg.assets[c].sac = `C${c.slice(1)}`;
   env.cfg.blend.mode = "hazecredit";
   env.cfg.haze.hazeCredit = "CPOOL";
   env.cfg.haze.vaultFactory = "CFACTORY";

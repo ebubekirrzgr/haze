@@ -53,6 +53,14 @@ export class VaultClient {
   repay(owner: string, amount: bigint) {
     return this.soroban.buildInvoke(owner, this.vaultId, "repay", [sc.i128(amount)]);
   }
+  /** Herhangi bir rezervi (fiat token) borç al → sahibe */
+  borrowAsset(owner: string, asset: string, amount: bigint) {
+    return this.soroban.buildInvoke(owner, this.vaultId, "borrow_asset", [sc.address(asset), sc.i128(amount)]);
+  }
+  /** Rezerv cinsinden borç öde; artan sahibe döner */
+  repayAsset(owner: string, asset: string, amount: bigint) {
+    return this.soroban.buildInvoke(owner, this.vaultId, "repay_asset", [sc.address(asset), sc.i128(amount)]);
+  }
   setDailyLimit(owner: string, limit: bigint) {
     return this.soroban.buildInvoke(owner, this.vaultId, "set_daily_limit", [sc.i128(limit)]);
   }

@@ -146,7 +146,20 @@ if (status === "NONE") throw new Error("ASA isteği gelmedi (Lithic webhook / t�
 log(`✓ ASA onaylandı, hold ${status}`);
 await post("/terminal/clear", { token: ch.token });
 
-// 8) nakde çevir: hUSDY'den — PWA'daki sıra: teklif → vault.withdraw → hazineye memo'lu path payment (hUSDY → tam USDC) → anchor durumu
+// 8) fiat borç: USD teminata karşı hTRY borç al, sonra fazlasıyla öde (artan geri döner)
+if (cfg.assets.hTRY?.sac) {
+  const tryAmt = toStroops("100");
+  const { tx: bTx } = await vaultClient.borrowAsset(pub, cfg.assets.hTRY.sac, tryAmt);
+  await sponsor(bTx);
+  const balB = await loadBalances(cfg, pub);
+  log(`✓ borrow_asset 100 hTRY → cüzdan (bakiye ${Number(balB.hTRY ?? 0n) / 1e7} hTRY)`);
+  const { tx: rTx } = await vaultClient.repayAsset(pub, cfg.assets.hTRY.sac, tryAmt);
+  await sponsor(rTx);
+  const cr = await get<{ reserves: { code: string; liabilitiesFloat: number }[] }>(`/credit/${pub}?fresh=1`);
+  log(`✓ repay_asset 100 hTRY → borç ${cr.reserves.find((r) => r.code === "hTRY")?.liabilitiesFloat ?? 0} hTRY`);
+}
+
+// 9) nakde çevir: hUSDY'den — PWA'daki sıra: teklif → vault.withdraw → hazineye memo'lu path payment (hUSDY → tam USDC) → anchor durumu
 const instr = await post<{ id: string; usdcAmount: string; tryAmount: string; treasury: string; memo: string }>("/cashout/start", { userId: pub, amountTry: Number(cashoutTryArg) });
 const usdcOut = toStroops(Number(instr.usdcAmount).toFixed(7));
 const needHusdy = (Number(instr.usdcAmount) / prices.hUSDY!) * 1.01;

@@ -178,6 +178,17 @@ const STR = {
   "varlik.treasury": { tr: "Tokenize hazine bonosu · fiyat artar", en: "Tokenized treasuries · price accrues", pt: "Títulos do tesouro tokenizados · o preço acumula", es: "Bonos del tesoro tokenizados · el precio acumula" },
   "varlik.gold": { tr: "Tokenize altın · değer koruma", en: "Tokenized gold · store of value", pt: "Ouro tokenizado · reserva de valor", es: "Oro tokenizado · reserva de valor" },
   "varlik.stock": { tr: "Tokenize hisse · {ad}", en: "Tokenized stock · {ad}", pt: "Ação tokenizada · {ad}", es: "Acción tokenizada · {ad}" },
+  "varlik.fiat": { tr: "Fiat token · yalnız borç", en: "Fiat token · borrow only", pt: "Token fiat · somente empréstimo", es: "Token fiat · solo préstamo" },
+  "kazan.tabBorc": { tr: "Borç al", en: "Borrow", pt: "Emprestar", es: "Pedir prestado" },
+  "kazan.borcBaslik": { tr: "Teminata karşı borç al", en: "Borrow against collateral", pt: "Tomar emprestado contra a garantia", es: "Pedir prestado contra la garantía" },
+  "kazan.borcNot": { tr: "Teminatın yerinde kalır; seçtiğin para biriminde borç cüzdanına gelir. Kullanılabilir limit {limit} (USD). Kur riski borçludan havuza geçer: lira değer kaybederse borcun dolar karşılığı küçülür.", en: "Your collateral stays put; the loan arrives in your wallet in the currency you choose. Available limit {limit} (USD). FX risk shifts from you to the pool: if the lira weakens, your debt shrinks in dollar terms.", pt: "Sua garantia fica onde está; o empréstimo chega na sua carteira na moeda escolhida. Limite disponível {limit} (USD). O risco cambial passa de você para o pool: se a lira cair, sua dívida diminui em dólares.", es: "Tu garantía se queda donde está; el préstamo llega a tu billetera en la moneda que elijas. Límite disponible {limit} (USD). El riesgo cambiario pasa de ti al pool: si la lira cae, tu deuda se reduce en dólares." },
+  "kazan.borcBtn": { tr: "{code} borç al", en: "Borrow {code}", pt: "Emprestar {code}", es: "Pedir {code} prestado" },
+  "kazan.odeBtn": { tr: "{code} borcunu öde", en: "Repay {code}", pt: "Quitar {code}", es: "Pagar {code}" },
+  "kazan.borclar": { tr: "Açık borçlar", en: "Open debts", pt: "Dívidas em aberto", es: "Deudas abiertas" },
+  "kazan.borcYok": { tr: "Açık borç yok.", en: "No open debt.", pt: "Nenhuma dívida em aberto.", es: "Sin deudas abiertas." },
+  "kazan.cuzdan": { tr: "Cüzdan", en: "Wallet", pt: "Carteira", es: "Billetera" },
+  "kazan.adimBorrow": { tr: "vault.borrow_asset ({code} → cüzdan)", en: "vault.borrow_asset ({code} → wallet)", pt: "vault.borrow_asset ({code} → carteira)", es: "vault.borrow_asset ({code} → billetera)" },
+  "kazan.adimRepay": { tr: "vault.repay_asset ({code})", en: "vault.repay_asset ({code})", pt: "vault.repay_asset ({code})", es: "vault.repay_asset ({code})" },
   // sunucu bildirimleri (kind → başlık; gövde data'dan)
   "bildirim.salary_received": { tr: "Maaş hesabına geçti", en: "Salary received", pt: "Salário recebido", es: "Salario recibido" },
   "bildirim.salary_settled": { tr: "Maaş geldi", en: "Salary settled", pt: "Salário liquidado", es: "Salario liquidado" },
@@ -193,9 +204,9 @@ const STR = {
 
 export type Key = keyof typeof STR;
 const NAMES: Record<Exclude<Lang, "tr">, Record<AssetCode, string>> = {
-  en: { USDC: "USD Coin", hUSDY: "Treasuries", hXAU: "Gold", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Turkish lira" },
-  pt: { USDC: "USD Coin", hUSDY: "Títulos do tesouro", hXAU: "Ouro", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Lira turca" },
-  es: { USDC: "USD Coin", hUSDY: "Bonos del tesoro", hXAU: "Oro", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Lira turca" },
+  en: { USDC: "USD Coin", hUSDY: "Treasuries", hXAU: "Gold", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Turkish lira", hEUR: "Euro", hGBP: "British pound", hCHF: "Swiss franc", hARS: "Argentine peso", hBRL: "Brazilian real" },
+  pt: { USDC: "USD Coin", hUSDY: "Títulos do tesouro", hXAU: "Ouro", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Lira turca", hEUR: "Euro", hGBP: "Libra esterlina", hCHF: "Franco suíço", hARS: "Peso argentino", hBRL: "Real brasileiro" },
+  es: { USDC: "USD Coin", hUSDY: "Bonos del tesoro", hXAU: "Oro", hNVDA: "NVIDIA", hSHEL: "Shell", hBMW: "BMW", hTRY: "Lira turca", hEUR: "Euro", hGBP: "Libra esterlina", hCHF: "Franco suizo", hARS: "Peso argentino", hBRL: "Real brasileño" },
 };
 const LOCALE: Record<Lang, string> = { tr: "tr-TR", en: "en-US", pt: "pt-BR", es: "es-ES" };
 
@@ -254,6 +265,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
       const m = ASSET_META[code as AssetCode];
       if (!m) return "";
       if (m.kind === "stock") return t("varlik.stock", { ad: assetName(code) });
+      if (m.kind === "fiat") return t("varlik.fiat");
       if (m.kind === "stable" || m.kind === "treasury" || m.kind === "gold") return t(`varlik.${m.kind}` as Key);
       return assetName(code);
     };

@@ -31,7 +31,7 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 | Ekran | Ne olur |
 |---|---|
 | **Hesap açma** | Türkçe, İngilizce, Portekizce veya İspanyolca arayüz (otomatik algılanır, profil sayfasından değiştirilir). Passkey ile hesap oluşur. Rezervler sponsorludur, ücretler fee-bump ile ödenir, deterministik bir kasa dağıtılır. Kullanıcı XLM'e hiç dokunmaz. |
-| **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, tokenize hazine bonosu, altın ve hisseler (NVIDIA, Shell, BMW) arasında dağıtılır. |
+| **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, tokenize hazine bonosu, altın ve hisseler (NVIDIA, Shell, BMW) arasında dağıtılır. "Borç al" sekmesi bu teminata karşı fiat token (TRY, EUR, GBP, CHF, ARS, BRL) borçlandırır. |
 | **Kart** | Temassız ödeme zincir dışında onaylanır: önbellekteki pozisyonlarla milisaniyeler, soğuk okumada yaklaşık bir saniye. Zincirdeki borç birkaç saniye sonra operatör kuyruğundan açılır. |
 | **Nakde çevir** | Altta yatan varlık satılmadan, path payment ve anchor çekimi ile banka hesabına yerel para birimiyle çekim yapılır. |
 | **Maaş günü** | Maaş kuralı açık borcu kapatır, kalanı yeniden teminata ekler. |
@@ -46,7 +46,10 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 | `hNVDA` | Tokenize NVIDIA hissesi | Hisse teminatı | 0,65 |
 | `hSHEL` | Tokenize Shell hissesi | Hisse teminatı | 0,70 |
 | `hBMW` | Tokenize BMW hissesi | Hisse teminatı | 0,70 |
-| `hTRY` | Tokenize Türk lirası | Giriş/çıkış takas bacağı | — |
+| `hTRY` | Tokenize Türk lirası | Borç alınabilir fiat rezerv, giriş/çıkış bacağı | 0 (borç faktörü 0,85) |
+| `hEUR` `hGBP` `hCHF` `hARS` `hBRL` | Tokenize euro, sterlin, frank, Arjantin pesosu, Brezilya reali | Borç alınabilir fiat rezervler | 0 (borç faktörü 0,85) |
+
+Fiat token'lar **yalnız borç** rezervidir: teminat sayılmazlar, ama dolar cinsi teminata karşı borç alınabilir (`vault.borrow_asset`) ve aynı cinsten ödenir (`vault.repay_asset`). Dolar teminat, lira borç: lira değer kaybettikçe borcun dolar karşılığı küçülür; kur riski borçluda değil, havuza fiat sağlayanlarda. hTRY anchor'ın SEP-38 USD/TRY kurundan fiyatlanır; diğer fiat fiyatları küçük rastgele yürüyüşlü sabit demo tabanlarıdır.
 
 Varlık kümesi tek yerde tanımlıdır: [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) içindeki `ASSET_META` (ad, tür, taban fiyat, risk parametreleri, ihraç ve demo miktarları). İhraç, AMM, havuz rezervleri, fiyat botu, market maker ve PWA bu kayıttan türer; yeni bir gerçek dünya varlığı eklemek tek satır artı havuz rezervlerinin yeniden dağıtımıdır.
 
@@ -132,6 +135,7 @@ Kullanıcı başına bir kasa. **Sahip**, kullanıcının Stellar hesabıdır. *
 | `deposit(asset, amount)` | Sahip | Varlığı sahipten alır ve teminat olarak yatırır |
 | `withdraw(asset, amount)` | Sahip | Teminatı sahibe çeker; pozisyon sağlıksız kalırsa geri alınır |
 | `borrow(amount)` | Sahip | Teminata karşı USDC borç alır ve sahibe gönderir |
+| `borrow_asset(asset, amount)` / `repay_asset(asset, amount)` | Sahip | Herhangi bir havuz rezervini (fiat token) borç alır ya da öder; fazla ödeme geri döner |
 | `repay(amount)` | Sahip | Sahibin USDC'siyle borç öder; fazlası yeniden teminata eklenir |
 | `set_daily_limit(limit)` / `set_frozen(bool)` | Sahip | Zincirde uygulanan kart kontrolleri |
 | `borrow_for_card(amount, auth_id)` | Operatör | Kart yetkilendirmesi için USDC borç açar ve takas hazinesine aktarır. `auth_id` (ihraççı yetkilendirme token'ının SHA-256'sı) üzerinde idempotenttir. Günlük limit ve dondurmayı uygular. |
@@ -237,7 +241,7 @@ pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8   # mock anchor'dan tur 
 pnpm --filter @haze/scripts assets        # hUSDY / hXAU / hTRY ihracı, 4 SAC dağıtımı
 pnpm --filter @haze/scripts haze:deploy   # wasm build, MockOracle, HazeCredit, VaultFactory dağıtımı
 pnpm --filter @haze/scripts amm           # USDC/hUSDY, USDC/hXAU, USDC/hTRY likidite havuzları
-pnpm --filter @haze/scripts pool:supply 200   # hazineden HazeCredit'e USDC likiditesi (borçlar havuz bakiyesinden ödenir)
+pnpm --filter @haze/scripts pool:supply all   # hazineden aktif havuza USDC + tüm fiat rezervler (borçlar havuz bakiyesinden ödenir)
 pnpm dev:api                              # fiyat botu oracle'ı ve teklif defterini güncellemeye başlar
 pnpm --filter @haze/scripts demo-user     # sponsorlu hesap, kasa, teminat, allowance, kart, anchor JWT
 pnpm --filter @haze/scripts rehearse      # tüm istemci akışlarının atılabilir bir anahtarla uçtan uca provası (aşağıda)

@@ -19,7 +19,8 @@ import {
 } from "@haze/stellar/browser";
 import { api, type ApiConfig } from "./api.ts";
 
-export type AssetCode = "USDC" | "hUSDY" | "hXAU" | "hTRY";
+export type { AssetCode } from "@haze/stellar/browser";
+import type { AssetCode, RwaCode } from "@haze/stellar/browser";
 
 export function toHazeConfig(c: ApiConfig): HazeConfig {
   return {
@@ -139,7 +140,7 @@ export class Chain {
   }
 
   /** USDC → hedef varlık (strict receive): hedef miktar alınır, sendMax %1 pay */
-  async swapUsdcTo(code: "hUSDY" | "hXAU", destAmount: bigint): Promise<string> {
+  async swapUsdcTo(code: RwaCode, destAmount: bigint): Promise<string> {
     const est = await estimateSendAmount(this.cfg, this.asset("USDC"), this.asset(code), destAmount);
     if (!est) throw new Error(`USDC → ${code} yolu bulunamadı`);
     const tx = await buildPathPaymentStrictReceive(this.cfg, this.pub, {
@@ -153,8 +154,8 @@ export class Chain {
     return this.signAndSponsor(tx);
   }
 
-  /** Nakde çevirme adım 3a: hXAU/hUSDY gönder, anchor hazinesi tam USDC alsın (memo'lu) */
-  async pathPayToAnchor(code: "hXAU" | "hUSDY", usdcAmount: bigint, treasury: string, memoId: string): Promise<string> {
+  /** Nakde çevirme adım 3a: RWA (hXAU/hUSDY/hisse) gönder, anchor hazinesi tam USDC alsın (memo'lu) */
+  async pathPayToAnchor(code: RwaCode, usdcAmount: bigint, treasury: string, memoId: string): Promise<string> {
     const est = await estimateSendAmount(this.cfg, this.asset(code), this.asset("USDC"), usdcAmount);
     if (!est) throw new Error(`${code} → USDC yolu bulunamadı`);
     const tx = await buildPathPaymentStrictReceive(this.cfg, this.pub, {

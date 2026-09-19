@@ -31,19 +31,24 @@ The result is a card that lets people keep their savings invested while spending
 | Screen | What happens |
 |---|---|
 | **Onboarding** | A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
-| **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, hUSDY (tokenized treasuries) and hXAU (tokenized gold) with a single passkey approval. |
+| **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, tokenized treasuries, gold and stocks (NVIDIA, Shell, BMW) with a single passkey approval. |
 | **Card** | Contactless payments are authorized off-chain, in milliseconds from cached positions and about a second on a cold read. The on-chain borrow follows seconds later from an operator queue. |
 | **Cash out** | Withdraw to a bank account in local currency without selling the underlying asset, via path payment and anchor withdrawal. |
 | **Payday** | The salary rule repays outstanding debt and re-collateralizes the rest. |
 
 **Assets**
 
-| Symbol | Description | Role |
-|---|---|---|
-| `USDC` | Circle USDC (testnet issuer) | Borrow asset, primary collateral |
-| `hUSDY` | Tokenized short-term treasury exposure | Yield-bearing collateral |
-| `hXAU` | Tokenized gold | Store-of-value collateral |
-| `hTRY` | Tokenized Turkish lira | On/off-ramp settlement leg |
+| Symbol | Description | Role | Collateral factor |
+|---|---|---|---|
+| `USDC` | Circle USDC (testnet issuer) | Borrow asset, primary collateral | 0.95 |
+| `hUSDY` | Tokenized short-term treasury exposure | Yield-bearing collateral | 0.90 |
+| `hXAU` | Tokenized gold | Store-of-value collateral | 0.75 |
+| `hNVDA` | Tokenized NVIDIA stock | Equity collateral | 0.65 |
+| `hSHEL` | Tokenized Shell stock | Equity collateral | 0.70 |
+| `hBMW` | Tokenized BMW stock | Equity collateral | 0.70 |
+| `hTRY` | Tokenized Turkish lira | On/off-ramp settlement leg | — |
+
+The asset set is defined once in [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) (`ASSET_META`): name, kind, base price, risk parameters, issuance and demo amounts. Issuance, AMM seeding, pool reserves, the price bot, the market maker and the PWA all derive from that registry, so adding another real-world asset is a one-line change plus a redeploy of the pool reserves.
 
 Turkey is the launch market. Amounts are presented in TRY and settled in USDC.
 
@@ -301,7 +306,7 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 |---|---|---|
 | Create account with a passkey | PWA | Sponsored account (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Receive salary | Profile → Employer panel | SEP-38 quote, SEP-6 deposit-exchange, `settle_salary` |
-| Allocate savings | Earn → Allocation | 2× `PathPaymentStrictReceive` + 3× `vault.deposit` |
+| Allocate savings | Earn → Allocation | One `PathPaymentStrictReceive` per chosen asset + `vault.deposit` for each |
 | Pay at a café | Terminal → Contactless pay | ASA answered off-chain, then `borrow_for_card` → settlement treasury |
 | Cash out from gold | Cash out → From gold | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, path payment to anchor |
 | Payday | Profile → Simulate payday | `settle_salary`: repay, then re-supply the remainder as collateral |
@@ -313,7 +318,7 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 - Runs on **Stellar testnet** against a self-hosted **Blend v2** pool (deployed with blend-utils); HazeCredit remains the fallback. Contracts are not audited and must not be used with real funds.
 - Built for the **Rise In × Stellar Pro Hackathon 2026** (Istanbul, September 19–20).
 - Regulatory and compliance considerations (card issuing licences, KYC, lending regulation) are explicitly out of scope for this prototype.
-- The anchor is a mock (`tr-mock-anchor.fly.dev`). Yield on hUSDY is simulated as price appreciation under accelerated time and is stated as such in the demo.
+- The anchor is a mock (`tr-mock-anchor.fly.dev`). Yield on hUSDY is simulated as price appreciation under accelerated time; gold and stock prices follow a random walk around a configurable base (`XAU_USD`, `NVDA_USD`, `SHEL_USD`, `BMW_USD`). All of this is stated as such in the demo.
 
 ---
 

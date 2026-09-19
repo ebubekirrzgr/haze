@@ -1,6 +1,7 @@
 "use client";
 /** Canlı getiri sayacı: son okunan orana göre saniyelik interpolasyon; 30 sn'de bir zincirden düzeltme. */
 import { useEffect, useMemo, useState } from "react";
+import { ASSET_META, isYieldByPrice, type AssetCode } from "@haze/stellar/browser";
 import type { CreditView, Prices } from "@/lib/api.ts";
 
 export function yieldRates(credit: CreditView, prices?: Prices) {
@@ -10,7 +11,9 @@ export function yieldRates(credit: CreditView, prices?: Prices) {
   let collateralValue = 0;
   const rows = credit.reserves.map((r) => {
     const value = r.collateralFloat * r.priceFloat;
-    const apy = r.code === "hUSDY" ? husdyApy : r.code === "hXAU" ? 0 : r.supplyApr;
+    // hUSDY: fiyat artışı = getiri · altın ve hisseler: getiri yok (değer koruma) · USDC: Blend supply faizi
+    const kind = ASSET_META[r.code as AssetCode]?.kind;
+    const apy = isYieldByPrice(r.code) ? husdyApy : kind === "gold" || kind === "stock" ? 0 : r.supplyApr;
     valuePerYear += value * apy;
     collateralValue += value;
     return { ...r, value, apy };

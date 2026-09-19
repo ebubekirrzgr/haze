@@ -1,26 +1,27 @@
 /**
- * Adım 5 — klasik AMM havuzları: USDC/hUSDY, USDC/hXAU, USDC/hTRY. Treasury likidite koyar.
- * Fiyatlar başlangıç oracle fiyatıyla aynı. Market maker botu ayrıca teklif defterine emir koyar.
+ * Adım 5 — klasik AMM havuzları: USDC/<her RWA> ve USDC/hTRY. Treasury likidite koyar.
+ * Fiyatlar başlangıç oracle fiyatıyla aynı (ASSET_META.baseUsd / <CODE>_USD env). Market maker botu ayrıca teklif defterine emir koyar.
+ * Var olan havuza yeniden likidite eklenmez (idempotent); yeni RWA eklenince yalnızca eksik havuzlar açılır.
  *
- *   pnpm --filter @haze/scripts amm -- [usdcPerPool=100] [xauUsd=2400] [usdTry=41]
+ *   pnpm --filter @haze/scripts amm [usdcPerPool=100] [usdTry=41]
  */
 import { Asset, LiquidityPoolAsset, LiquidityPoolFeeV18, Operation, getLiquidityPoolId } from "@stellar/stellar-sdk";
+import { ASSET_META, RWA_CODES, baseUsdOf, type RwaCode } from "@haze/stellar";
 import { horizon, keyFromEnv, readConfig, submitClassic } from "../lib/common.ts";
 
-const [usdcPerPoolArg = "100", xauArg = "2400", usdTryArg = "41"] = process.argv.slice(2);
+const [usdcPerPoolArg = "100", usdTryArg = "41"] = process.argv.slice(2);
 const usdcPerPool = Number(usdcPerPoolArg);
-const xauUsd = Number(xauArg);
 const usdTry = Number(usdTryArg);
 
 const cfg = readConfig();
 const treasury = keyFromEnv("TREASURY_SECRET");
 const USDC = new Asset(cfg.assets.USDC.code, cfg.assets.USDC.issuer);
 
-const pools: { code: "hUSDY" | "hXAU" | "hTRY"; priceUsd: number }[] = [
-  { code: "hUSDY", priceUsd: 1.0 },
-  { code: "hXAU", priceUsd: xauUsd },
+const pools: { code: RwaCode | "hTRY"; priceUsd: number }[] = [
+  ...RWA_CODES.map((code) => ({ code, priceUsd: baseUsdOf(code, process.env) })),
   { code: "hTRY", priceUsd: 1 / usdTry },
 ];
+void ASSET_META;
 
 const server = horizon(cfg);
 for (const p of pools) {
@@ -39,6 +40,10 @@ for (const p of pools) {
     exists = true;
   } catch {
     /* yok */
+  }
+  if (exists) {
+    console.log(`  AMM USDC/${p.code} zaten var, atlandı`);
+    continue;
   }
   const hash = await submitClassic(cfg, treasury, [
     Operation.changeTrust({ asset: lp }),

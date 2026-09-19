@@ -1,18 +1,19 @@
 "use client";
 /**
  * Nakde çevir: "2.000 TL → kayıtlı IBAN, kaynak: altın / borç".
- *  Teminattan çek: 1) vault.withdraw(hXAU) 2) SEP-38 teklif + SEP-6 withdraw-exchange 3) hazineye memo'lu PathPaymentStrictReceive (hXAU → tam USDC)
+ *  Teminattan çek: 1) vault.withdraw(RWA) 2) SEP-38 teklif + SEP-6 withdraw-exchange 3) hazineye memo'lu PathPaymentStrictReceive (RWA → tam USDC)
  *  Satmadan çek:   1) vault.borrow(USDC)   2) SEP-38 + SEP-6                             3) hazineye memo'lu USDC ödemesi
  * Anchor limiti aşılırsa tutar parçalanır (tek ilerleme çubuğu).
  */
 import { useState } from "react";
-import { splitTry, toStroops } from "@haze/stellar/browser";
+import { ASSET_META, RWA_CODES, splitTry, toStroops, type RwaCode } from "@haze/stellar/browser";
 import { Adimlar, Sahne, Ust } from "@/components/ui.tsx";
 import { api } from "@/lib/api.ts";
 import { useChain, useSession } from "@/lib/session.tsx";
 import { fmtNum, fmtTry, fmtUsd } from "@/lib/format.ts";
 
-type Source = "hXAU" | "hUSDY" | "borrow";
+type Source = RwaCode | "borrow";
+const SOURCE_LABEL: Record<RwaCode, string> = { hXAU: "Altından (hXAU)", hUSDY: "Bonodan (hUSDY)", hNVDA: "NVIDIA'dan (hNVDA)", hSHEL: "Shell'den (hSHEL)", hBMW: "BMW'den (hBMW)" };
 
 export default function Nakit() {
   const s = useSession();
@@ -28,7 +29,8 @@ export default function Nakit() {
   const usdTry = s.prices?.USDTRY ?? 0;
   const amt = Number(amountTry.replace(",", "."));
   const estUsdc = usdTry ? amt / usdTry : 0;
-  const price = source === "hXAU" ? s.prices?.hXAU ?? 0 : source === "hUSDY" ? s.prices?.hUSDY ?? 1 : 1;
+  const price = source === "borrow" ? 1 : s.prices?.[source] ?? ASSET_META[source].baseUsd;
+  const sources: Source[] = [...RWA_CODES.filter((c) => s.config?.assets?.[c]?.issuer), "borrow"];
   const collateral = s.credit?.reserves.find((r) => r.code === (source === "borrow" ? "USDC" : source));
   const limit = s.credit?.credit.availableLimitFloat ?? 0;
 
@@ -103,8 +105,8 @@ export default function Nakit() {
       <div className="blok cam kart">
         <div className="etiket" style={{ fontSize: 12 }}>Kaynak</div>
         <div className="cipler" style={{ marginTop: 8 }}>
-          {(["hXAU", "hUSDY", "borrow"] as Source[]).map((k) => (
-            <button key={k} className={`cip${source === k ? " aktif" : ""}`} onClick={() => setSource(k)}>{{ hXAU: "Altından (hXAU)", hUSDY: "Bonodan (hUSDY)", borrow: "Satmadan · borçla" }[k]}</button>
+          {sources.map((k) => (
+            <button key={k} className={`cip${source === k ? " aktif" : ""}`} onClick={() => setSource(k)}>{k === "borrow" ? "Satmadan · borçla" : SOURCE_LABEL[k]}</button>
           ))}
         </div>
         {source === "borrow" ? (
@@ -113,7 +115,7 @@ export default function Nakit() {
           </div>
         ) : (
           <div className="ikincil" style={{ fontSize: 13.5, marginTop: 10 }}>
-            Teminatta <b className="num" style={{ color: "var(--sepya)" }}>{fmtNum(collateral?.collateralFloat ?? 0, source === "hXAU" ? 4 : 2)} {source}</b>. Gerekli: ≈ {fmtNum(price ? estUsdc / price : 0, 4)} {source}. Aynı {source} tokenı DEX&apos;te tek atomik işlemle tam USDC&apos;ye dönüşür; anchor TL gönderir.
+            Teminatta <b className="num" style={{ color: "var(--sepya)" }}>{fmtNum(collateral?.collateralFloat ?? 0, ASSET_META[source].displayDecimals)} {source}</b>. Gerekli: ≈ {fmtNum(price ? estUsdc / price : 0, 4)} {source}. Aynı {source} tokenı DEX&apos;te tek atomik işlemle tam USDC&apos;ye dönüşür; anchor TL gönderir.
           </div>
         )}
         <div className="satir" style={{ fontSize: 14, marginTop: 10 }}><span className="ikincil">Hedef</span><span>Kayıtlı IBAN · TR•• •••• 4821 (simüle)</span></div>

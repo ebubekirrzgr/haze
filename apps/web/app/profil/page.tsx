@@ -89,7 +89,7 @@ export default function Profil() {
 
       <div className="blok cam kart">
         <div className="etiket" style={{ fontSize: 12 }}>Maaş kuralı</div>
-        <div style={{ fontSize: 14, marginTop: 6 }}>Maaş USDC olarak gelince borç kapanır, kalan Kazan&apos;a eklenir; hUSDY/hXAU dağılımını tek passkey onayıyla uygularsın.</div>
+        <div style={{ fontSize: 14, marginTop: 6 }}>Maaş USDC olarak gelince borç kapanır, kalan Kazan&apos;a eklenir; RWA dağılımını (bono, altın, hisse) tek passkey onayıyla uygularsın.</div>
         <div className="satir" style={{ fontSize: 14, marginTop: 8 }}><span className="ikincil">Vault USDC izni</span><span className="num">{user ? `${fmtNum(Number(user.allowance.amount) / 1e7, 0)} USDC · ledger ${user.allowance.expiryLedger}` : "—"}</span></div>
         <div className="satir" style={{ fontSize: 14 }}><span className="ikincil">Dağılım</span><span className="num">{user?.rule.allocation ?? "—"}</span></div>
         <div className="btn-satir" style={{ marginTop: 10 }}>
@@ -111,7 +111,7 @@ export default function Profil() {
 
       <div className="blok cam-sicak kart" style={{ fontSize: 13.5 }}>
         <div className="etiket" style={{ fontSize: 12 }}>Şeffaflık</div>
-        <div style={{ marginTop: 6 }}>Mock olanlar: TR Mock Anchor (testnet USDC gerçek), hUSDY/hXAU/hTRY (biz bastık; mainnet karşılıkları Ondo USDY, Matrixdock XAUm), Lithic sandbox kart, hızlandırılmış getiri ({s.prices?.daysPerMinute ?? 1} gün/dk). Hukuki uyum kapsam dışı.</div>
+        <div style={{ marginTop: 6 }}>Mock olanlar: TR Mock Anchor (testnet USDC gerçek), hUSDY/hXAU/hNVDA/hSHEL/hBMW/hTRY (biz bastık; mainnet karşılıkları Ondo USDY, Matrixdock XAUm, tokenize hisseler), Lithic sandbox kart, hızlandırılmış getiri ({s.prices?.daysPerMinute ?? 1} gün/dk). Hukuki uyum kapsam dışı.</div>
       </div>
 
       <button className="btn btn-metin blok" onClick={s.logout}>Çıkış yap (cüzdanı bu cihazdan sil)</button>

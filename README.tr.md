@@ -31,19 +31,24 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 | Ekran | Ne olur |
 |---|---|
 | **Hesap açma** | Passkey ile hesap oluşur. Rezervler sponsorludur, ücretler fee-bump ile ödenir, deterministik bir kasa dağıtılır. Kullanıcı XLM'e hiç dokunmaz. |
-| **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, hUSDY (tokenize hazine bonosu) ve hXAU (tokenize altın) arasında dağıtılır. |
+| **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, tokenize hazine bonosu, altın ve hisseler (NVIDIA, Shell, BMW) arasında dağıtılır. |
 | **Kart** | Temassız ödeme zincir dışında onaylanır: önbellekteki pozisyonlarla milisaniyeler, soğuk okumada yaklaşık bir saniye. Zincirdeki borç birkaç saniye sonra operatör kuyruğundan açılır. |
 | **Nakde çevir** | Altta yatan varlık satılmadan, path payment ve anchor çekimi ile banka hesabına yerel para birimiyle çekim yapılır. |
 | **Maaş günü** | Maaş kuralı açık borcu kapatır, kalanı yeniden teminata ekler. |
 
 **Varlıklar**
 
-| Sembol | Açıklama | Rol |
-|---|---|---|
-| `USDC` | Circle USDC (testnet ihraççısı) | Borç varlığı, ana teminat |
-| `hUSDY` | Tokenize kısa vadeli hazine bonosu | Getiri üreten teminat |
-| `hXAU` | Tokenize altın | Değer saklama teminatı |
-| `hTRY` | Tokenize Türk lirası | Giriş/çıkış takas bacağı |
+| Sembol | Açıklama | Rol | Teminat faktörü |
+|---|---|---|---|
+| `USDC` | Circle USDC (testnet ihraççısı) | Borç varlığı, ana teminat | 0,95 |
+| `hUSDY` | Tokenize kısa vadeli hazine bonosu | Getiri üreten teminat | 0,90 |
+| `hXAU` | Tokenize altın | Değer saklama teminatı | 0,75 |
+| `hNVDA` | Tokenize NVIDIA hissesi | Hisse teminatı | 0,65 |
+| `hSHEL` | Tokenize Shell hissesi | Hisse teminatı | 0,70 |
+| `hBMW` | Tokenize BMW hissesi | Hisse teminatı | 0,70 |
+| `hTRY` | Tokenize Türk lirası | Giriş/çıkış takas bacağı | — |
+
+Varlık kümesi tek yerde tanımlıdır: [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) içindeki `ASSET_META` (ad, tür, taban fiyat, risk parametreleri, ihraç ve demo miktarları). İhraç, AMM, havuz rezervleri, fiyat botu, market maker ve PWA bu kayıttan türer; yeni bir gerçek dünya varlığı eklemek tek satır artı havuz rezervlerinin yeniden dağıtımıdır.
 
 Başlangıç pazarı Türkiye'dir. Tutarlar TL olarak gösterilir, USDC ile takas edilir.
 
@@ -301,7 +306,7 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 |---|---|---|
 | Passkey ile hesap oluştur | PWA | Sponsorlu hesap (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Maaş al | Profil → İşveren paneli | SEP-38 teklif, SEP-6 deposit-exchange, `settle_salary` |
-| Birikimi dağıt | Kazan → Dağılım | 2× `PathPaymentStrictReceive` + 3× `vault.deposit` |
+| Birikimi dağıt | Kazan → Dağılım | Seçilen her varlık için bir `PathPaymentStrictReceive` + her biri için `vault.deposit` |
 | Kafede öde | Terminal → Temassız öde | Zincir dışı ASA onayı, ardından `borrow_for_card` → takas hazinesi |
 | Altından nakde çevir | Nakde çevir → Altından | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, anchor'a path payment |
 | Maaş günü | Profil → Maaş günü simülasyonu | `settle_salary`: geri ödeme, kalan yeniden teminata |
@@ -313,7 +318,7 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 - **Stellar testnet** üzerinde, kendi dağıttığımız **Blend v2** havuzuyla (blend-utils) çalışır; HazeCredit yedek olarak durur. Sözleşmeler denetlenmemiştir; gerçek fonlarla kullanılmamalıdır.
 - **Rise In × Stellar Pro Hackathon 2026** (İstanbul, 19–20 Eylül) için geliştirilmiştir.
 - Düzenleyici ve uyum konuları (kart ihraç lisansı, KYC, kredi mevzuatı) bu prototipte açıkça kapsam dışıdır.
-- Anchor bir mock'tur (`tr-mock-anchor.fly.dev`). hUSDY getirisi hızlandırılmış zamanla fiyat artışı olarak simüle edilir ve demoda böyle ifade edilir.
+- Anchor bir mock'tur (`tr-mock-anchor.fly.dev`). hUSDY getirisi hızlandırılmış zamanla fiyat artışı olarak simüle edilir; altın ve hisse fiyatları ayarlanabilir bir tabanın (`XAU_USD`, `NVDA_USD`, `SHEL_USD`, `BMW_USD`) etrafında rastgele yürür. Demoda bunlar böyle ifade edilir.
 
 ---
 

@@ -2,7 +2,7 @@
  * blend-utils içine kopyalanır: src/v2/testing-scripts/haze-mock.ts
  * mock-example.ts'in Haze uyarlaması:
  *   - BLND + mock USDC (yalnızca comet/backstop için) + Comet LP + oracle + Blend v2 (factory, backstop, emitter)
- *   - "Haze" havuzu: rezervler = Circle testnet USDC SAC, hUSDY SAC, hXAU SAC (testnet.contracts.json'dan)
+ *   - "Haze" havuzu: rezervler = testnet.contracts.json'daki HAZE_RESERVES (USDC, hUSDY, hXAU, hNVDA, hSHEL, hBMW; sıra COLLATERAL_CODES)
  *   - Backstop depozitosu (whale = treasury), havuz Active, ödül bölgesi
  *   - Treasury Circle USDC'yi havuza Supply eder (kart borçlarının likiditesi)
  * Çalıştırma: node ./lib/v2/testing-scripts/haze-mock.js haze
@@ -34,18 +34,24 @@ import { deployCometFactory } from '../../v1/deploy/comet-factory.js';
 import { deployComet } from '../../v1/deploy/comet.js';
 
 const txBuilderOptions: TransactionBuilder.TransactionBuilderOptions = {
-  fee: '10000',
+  fee: '2000000', // 0,2 XLM / op: testnet surge fiyatlamasında 10_000 ile işlem ledger'a girmiyor ve blend-utils sonsuza kadar bekliyor
   timebounds: { minTime: 0, maxTime: 0 },
   networkPassphrase: config.passphrase,
 };
 
 const hazeCfg = JSON.parse(readFileSync(process.env.HAZE_CONFIG!, 'utf8'));
 const USDC_SAC: string = hazeCfg.assets.USDC.sac;
-const HUSDY_SAC: string = hazeCfg.assets.hUSDY.sac;
-const HXAU_SAC: string = hazeCfg.assets.hXAU.sac;
-const XAU_USD = Number(process.env.XAU_USD ?? 2400);
 const SUPPLY_USDC = Number(process.env.HAZE_SUPPLY_USDC ?? 200);
-if (!USDC_SAC || !HUSDY_SAC || !HXAU_SAC) throw new Error('testnet.contracts.json içinde SAC adresleri eksik');
+// Rezerv listesi: deploy.sh HAZE_RESERVES=code:sac:priceUsd:c_factor:l_factor:util:max_util;... olarak verir (COLLATERAL_CODES sırası)
+const RESERVES = (process.env.HAZE_RESERVES ?? '')
+  .split(';')
+  .filter(Boolean)
+  .map((r) => {
+    const [code, sac, priceUsd, c_factor, l_factor, util, max_util] = r.split(':');
+    return { code, sac, priceUsd: Number(priceUsd), c_factor: Number(c_factor), l_factor: Number(l_factor), util: Number(util), max_util: Number(max_util) };
+  });
+if (!USDC_SAC || RESERVES.length === 0 || RESERVES.some((r) => !r.sac)) throw new Error('HAZE_RESERVES / SAC adresleri eksik');
+if (RESERVES[0].sac !== USDC_SAC) throw new Error('HAZE_RESERVES ilk rezerv USDC olmalı');
 
 await mock();
 
@@ -68,6 +74,12 @@ export async function mock() {
   const BLND = await tryDeployStellarAsset(new Asset('BLND', config.admin.publicKey()), adminTxParams);
   const USDC = await tryDeployStellarAsset(new Asset('USDC', config.admin.publicKey()), adminTxParams);
 
+  // BLND / mock USDC daha önce dağıtıldıysa tryDeployStellarAsset simülasyonda düşer ama SDK yerel sıra numarasını
+  // yine de artırır; sonraki işlem sıra boşluğuyla gider ve core sessizce düşürür (getTransaction sonsuza kadar NOT_FOUND).
+  // Hesabı zincirden yeniden yükleyerek sırayı eşitle.
+  adminTxParams.account = await config.rpc.getAccount(config.admin.publicKey());
+  whaleTxParams.account = await config.rpc.getAccount(whale.publicKey());
+
   console.log('Comet…');
   const cometFactory = await deployCometFactory(adminTxParams);
   const null_address = 'GCVJMEUXNIN7BYI4ERWW66ZJNTXRU2AWM65ZDYOODH5ZEZUM7UZXDEAD';
@@ -81,7 +93,7 @@ export async function mock() {
     null_address
   );
 
-  console.log('Oracle (Circle USDC, hUSDY, hXAU)…');
+  console.log(`Oracle (${RESERVES.map((r) => r.code).join(', ')})…`);
   await installContract('oraclemock', adminTxParams);
   await deployContract('oraclemock', 'oraclemock', adminTxParams);
   await bumpContractCode('oraclemock', adminTxParams);
@@ -91,11 +103,7 @@ export async function mock() {
     oracle.setData(
       Address.fromString(config.admin.publicKey()),
       { tag: 'Other', values: ['USD'] },
-      [
-        { tag: 'Stellar', values: [Address.fromString(USDC_SAC)] },
-        { tag: 'Stellar', values: [Address.fromString(HUSDY_SAC)] },
-        { tag: 'Stellar', values: [Address.fromString(HXAU_SAC)] },
-      ],
+      RESERVES.map((r) => ({ tag: 'Stellar' as const, values: [Address.fromString(r.sac)] as [Address] })),
       7,
       300
     ),
@@ -103,7 +111,7 @@ export async function mock() {
     adminTxParams
   );
   await invokeSorobanOperation(
-    oracle.setPriceStable([BigInt(1e7), BigInt(1e7), BigInt(Math.round(XAU_USD * 1e7))]),
+    oracle.setPriceStable(RESERVES.map((r) => BigInt(Math.round(r.priceUsd * 1e7)))),
     () => undefined,
     adminTxParams
   );
@@ -120,27 +128,21 @@ export async function mock() {
       oracle: oracle.contractId(),
       min_collateral: BigInt(0),
       backstop_take_rate: 0.1e7,
-      max_positions: 8,
+      max_positions: 12,
     },
     adminTxParams
   );
 
-  // Rezervler — havuz henüz Setup (6) durumunda olduğu için gecikmesiz.
-  const usdcReserve: ReserveConfigV2 = {
-    index: 0, decimals: 7, c_factor: 950_0000, l_factor: 950_0000, util: 800_0000, max_util: 950_0000,
-    r_base: 1000, r_one: 20_0000, r_two: 50_0000, r_three: 1_000_0000, reactivity: 20, supply_cap: I128MAX, enabled: true,
-  };
-  const husdyReserve: ReserveConfigV2 = {
-    index: 1, decimals: 7, c_factor: 900_0000, l_factor: 100_0000, util: 500_0000, max_util: 600_0000,
-    r_base: 1000, r_one: 20_0000, r_two: 50_0000, r_three: 1_000_0000, reactivity: 20, supply_cap: I128MAX, enabled: true,
-  };
-  const hxauReserve: ReserveConfigV2 = {
-    index: 2, decimals: 7, c_factor: 750_0000, l_factor: 100_0000, util: 500_0000, max_util: 600_0000,
-    r_base: 1000, r_one: 20_0000, r_two: 50_0000, r_three: 1_000_0000, reactivity: 20, supply_cap: I128MAX, enabled: true,
-  };
-  await setupReserve(pool.contractId(), { asset: USDC_SAC, metadata: usdcReserve }, adminTxParams);
-  await setupReserve(pool.contractId(), { asset: HUSDY_SAC, metadata: husdyReserve }, adminTxParams);
-  await setupReserve(pool.contractId(), { asset: HXAU_SAC, metadata: hxauReserve }, adminTxParams);
+  // Rezervler — havuz henüz Setup (6) durumunda olduğu için gecikmesiz. Sıra = COLLATERAL_CODES = oracle sırası.
+  for (const [index, r] of RESERVES.entries()) {
+    const meta: ReserveConfigV2 = {
+      index, decimals: 7,
+      c_factor: Math.round(r.c_factor * 1e7), l_factor: Math.round(r.l_factor * 1e7), util: Math.round(r.util * 1e7), max_util: Math.round(r.max_util * 1e7),
+      r_base: 1000, r_one: 20_0000, r_two: 50_0000, r_three: 1_000_0000, reactivity: 20, supply_cap: I128MAX, enabled: true,
+    };
+    await setupReserve(pool.contractId(), { asset: r.sac, metadata: meta }, adminTxParams);
+    console.log(`  rezerv ${index} ${r.code} c=${r.c_factor} l=${r.l_factor}`);
+  }
 
   // Emisyon: USDC tedarikçilerine (b_token) %100
   const emissions: ReserveEmissionMetadata[] = [{ res_index: 0, res_type: 1, share: BigInt(1e7) }];
@@ -151,7 +153,12 @@ export async function mock() {
 
   console.log('BLND admin → emitter');
   const emitter = new EmitterContract(addressBook.getContractId('emitter'));
-  await invokeSorobanOperation(BLND.set_admin(emitter.contractId()), () => undefined, adminTxParams);
+  try {
+    await invokeSorobanOperation(BLND.set_admin(emitter.contractId()), () => undefined, adminTxParams);
+  } catch (e) {
+    // BLND önceki dağıtımdan kalmışsa admin'i zaten eski emitter'dadır; emisyon demo için gerekmez.
+    console.log('  BLND set_admin atlandı (admin zaten devredilmiş): ' + (e instanceof Error ? e.message : String(e)).slice(0, 120));
+  }
 
   if (SUPPLY_USDC > 0) {
     console.log(`Treasury ${SUPPLY_USDC} Circle USDC → Haze pool (Supply)`);

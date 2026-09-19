@@ -32,12 +32,12 @@ pnpm dev:terminal                                    # http://localhost:3001 →
 |---|---|---|---|
 | 1 | `pnpm --filter @haze/scripts keys` | 8 anahtar üretir, friendbot'la fonlar, `.env` + `testnet.contracts.json` yazar | `.env` içinde `*_SECRET` dolu |
 | 2 | Treasury'ye USDC: `pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8` (≈ 8×60 USDC; pnpm 10'da `--` kullanma, script'e argüman olarak geçer; paralel 3 oturum ≈ 1.500 USDC) ya da faucet.circle.com | Blend likiditesi + AMM + demo kullanıcı için USDC | Horizon'da treasury USDC bakiyesi |
-| 3 | `pnpm --filter @haze/scripts assets` | hUSDY/hXAU/hTRY ihracı → treasury, 4 SAC deploy | `testnet.contracts.json` → `assets.*.sac` dolu |
+| 3 | `pnpm --filter @haze/scripts assets` | ISSUED_CODES (hUSDY, hXAU, hNVDA, hSHEL, hBMW, hTRY) ihracı → treasury, 7 SAC deploy; idempotent | `testnet.contracts.json` → `assets.*.sac` dolu |
 | 4 | `pnpm --filter @haze/scripts haze:deploy` | `stellar contract build` (soroban-sdk 28 `cargo build`'i reddeder) → haze_vault upload, MockOracle, HazeCredit (rezervler + fiyat), VaultFactory | `haze.vaultFactory` dolu; `blend.mode = hazecredit` |
-| 5 | `pnpm --filter @haze/scripts amm` | USDC/hUSDY, USDC/hXAU, USDC/hTRY klasik AMM havuzları | `stellar.expert`'te liquidity pool |
+| 5 | `pnpm --filter @haze/scripts amm` | USDC/<her RWA> ve USDC/hTRY klasik AMM havuzları; var olanlar atlanır (Horizon 504 verirse tekrar koş) | `stellar.expert`'te liquidity pool |
 | 5b | `pnpm --filter @haze/scripts pool:supply 200` | Hazineden HazeCredit'e USDC likiditesi (kart borçları havuz bakiyesinden aktarılır; kullanıcı teminatı da havuzdadır) | `GET /credit/<G>` sonrası borç işlemleri geçiyor |
 | 6 | `pnpm dev:api` (ayrı terminal) | haze-api: fiyat botu oracle'ı + teklif defterini günceller | `GET /health`, `GET /prices` USDTRY dolu |
-| 7 | `pnpm --filter @haze/scripts demo-user` | Demo kullanıcı: sponsorlu hesap, vault, 500 USDC + 300 hUSDY + 0,1 hXAU teminat, allowance, kart, anchor JWT | `GET /credit/<G>` limit gösteriyor |
+| 7 | `pnpm --filter @haze/scripts demo-user` | Demo kullanıcı: sponsorlu hesap, vault, teminat (USDC + tüm RWA'lar, ASSET_META.demoAmount), allowance, kart, anchor JWT | `GET /credit/<G>` limit gösteriyor |
 | 8 | `pnpm dev:web`, `pnpm dev:terminal` | PWA + POS | terminal → ONAYLANDI, explorer'da `borrow_for_card` |
 | 8b | `pnpm --filter @haze/scripts rehearse` | PWA akışının tamamını atılabilir anahtarla prova eder (hesap → kasa → maaş → dağılım → kart) | Her satır ✓, son satırda `hold BORROWED` |
 
@@ -47,6 +47,7 @@ pnpm dev:terminal                                    # http://localhost:3001 →
 | 10 | haze-api'yi yeniden başlat | Blend modunda: pozisyonlar blend-sdk ile, fiyat botu `set_price_stable` (BLEND_ADMIN) | `GET /credit/<G>` `poolMode: blend` |
 
 Notlar
+- **Yeni RWA eklemek:** `ASSET_META`'ya satır ekle (config.ts), `assets` + `amm` koş, HazeCredit için `testnet.contracts.json`'da `haze.hazeCredit` ve `haze.mockOracle`'ı boşaltıp `haze:deploy --skip-build`, Blend için `blend:deploy` (yeni havuz; eski vault'lar eski havuzda kalır → yeni demo anahtarı). Rezerv sırası her yerde `COLLATERAL_CODES`.
 - Blend'de rezerv ekleme yalnızca havuz `Setup` (6) durumundayken gecikmesizdir; `haze-mock.ts` rezervleri backstop/Active'den önce ekler. Sonradan rezerv eklemek 7 gün bekler.
 - `set_status(0)` için backstop eşiği gerekir; BLND ve comet USDC'sini biz bastığımız için eşik sorun değil (whale = treasury).
 - Var olan vault'lar `pool` adresini kuruluşta alır. Blend'e geçtikten sonra demo kullanıcıyı **yeniden** kurmak gerekir (vault deterministik; yeni vault için yeni demo anahtarı: `.env`'den `DEMO_USER_SECRET`'ı sil ve `keys` + `demo-user`).

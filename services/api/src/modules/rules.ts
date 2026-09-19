@@ -1,7 +1,7 @@
 /**
  * Kural motoru — maaş kuralı: USDC G-hesabına düşünce vault.settle_salary(tutar, borç) çağrılır.
  * Allowance (miktar ve süre) yetersizse çağrılmaz, kullanıcıdan yenileme istenir.
- * Kalan USDC teminata eklenir; hUSDY/hXAU dağılımı kullanıcının tek passkey onayıyla (istemci) yapılır.
+ * Kalan USDC teminata eklenir; RWA dağılımı (hUSDY/hXAU/hisseler) kullanıcının tek passkey onayıyla (istemci) yapılır.
  */
 import { toFloat } from "@haze/stellar";
 import type { ChainOps } from "../chain.ts";
@@ -61,8 +61,8 @@ export class RulesService {
         "salary_settled",
         "Maaş geldi",
         repaid > 0n
-          ? `${toFloat(repaid).toFixed(2)} USDC borç kapandı, ${toFloat(added).toFixed(2)} USDC Kazan'a eklendi. hUSDY/hXAU dağılımını onayla.`
-          : `${toFloat(added).toFixed(2)} USDC Kazan'a eklendi. hUSDY/hXAU dağılımını onayla.`,
+          ? `${toFloat(repaid).toFixed(2)} USDC borç kapandı, ${toFloat(added).toFixed(2)} USDC Kazan'a eklendi. RWA dağılımını onayla.`
+          : `${toFloat(added).toFixed(2)} USDC Kazan'a eklendi. RWA dağılımını onayla.`,
         { tx: ref.hash, amount: use.toString(), repaid: repaid.toString(), added: added.toString(), allocation: JSON.parse(rule.allocation) },
       );
       this.d.log?.(`salary settled for ${userId}: ${toFloat(use)} USDC, repaid ${toFloat(repaid)}, tx ${ref.hash}`);

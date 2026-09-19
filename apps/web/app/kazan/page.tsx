@@ -1,17 +1,18 @@
 "use client";
 /**
- * Kazan: pozisyonlar, Kazan'a ekle (cüzdandan USDC), dağılım (USDC → hUSDY/hXAU path payment + deposit), çek.
+ * Kazan: pozisyonlar, Kazan'a ekle (cüzdandan USDC), dağılım (USDC → RWA'lar path payment + deposit), çek.
  * Kazan'a eklenen her varlık HazeVault üzerinden Blend'e teminat olarak gider; getiri ve limit aynı pozisyondan.
  */
 import { useEffect, useState } from "react";
-import { toStroops } from "@haze/stellar/browser";
+import { ASSET_META, COLLATERAL_CODES, RWA_CODES, assetBlurb, toStroops, type AssetCode, type CollateralCode, type RwaCode } from "@haze/stellar/browser";
 import { Adimlar, Sahne, Ust, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { api } from "@/lib/api.ts";
 import { useChain, useSession } from "@/lib/session.tsx";
 import { fmtNum, fmtPct, fmtUsd } from "@/lib/format.ts";
 
-type Code = "USDC" | "hUSDY" | "hXAU";
+type Code = CollateralCode;
+const DEFAULT_ALLOC: Record<Code, number> = { USDC: 40, hUSDY: 25, hXAU: 10, hNVDA: 10, hSHEL: 8, hBMW: 7 };
 
 export default function Kazan() {
   const s = useSession();
@@ -20,7 +21,7 @@ export default function Kazan() {
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<"ekle" | "dagit" | "cek">("ekle");
   const [amount, setAmount] = useState("");
-  const [alloc, setAlloc] = useState<Record<Code, number>>({ USDC: 50, hUSDY: 30, hXAU: 20 });
+  const [alloc, setAlloc] = useState<Record<Code, number>>(DEFAULT_ALLOC);
   const [withdrawCode, setWithdrawCode] = useState<Code>("hXAU");
   const [steps, setSteps] = useState<string[]>([]);
   const [step, setStep] = useState(0);
@@ -44,8 +45,8 @@ export default function Kazan() {
   useEffect(() => {
     if (s.credit && !s.prices) return;
     try {
-      const r = JSON.parse((s.notifications.find((n) => n.kind === "salary_settled")?.data ?? "{}") as string) as { allocation?: Record<Code, number> };
-      if (r.allocation) setAlloc(r.allocation);
+      const r = JSON.parse((s.notifications.find((n) => n.kind === "salary_settled")?.data ?? "{}") as string) as { allocation?: Partial<Record<Code, number>> };
+      if (r.allocation) setAlloc({ ...Object.fromEntries(COLLATERAL_CODES.map((c) => [c, 0])), ...r.allocation } as Record<Code, number>);
     } catch {
       /* */
     }
@@ -80,32 +81,38 @@ export default function Kazan() {
       await ch.deposit(vault, "USDC", toStroops(amt.toFixed(7)));
     });
 
-  /** Dağılım: cüzdandaki USDC'nin %'lerine göre hUSDY/hXAU al (path payment), sonra üçünü de deposit et */
-  const dagit = () =>
-    run(
-      ["Passkey ile imzala", `USDC → hUSDY (path payment)`, `USDC → hXAU (path payment)`, "vault.deposit ×3"],
+  /** Kullanılabilir RWA'lar: API config'de ihraç edilmiş olanlar */
+  const rwas: RwaCode[] = RWA_CODES.filter((c) => s.config?.assets?.[c]?.issuer);
+  const codes: Code[] = ["USDC", ...rwas];
+
+  /** Dağılım: cüzdandaki USDC'nin %'lerine göre RWA'ları al (path payment), sonra hepsini deposit et */
+  const dagit = () => {
+    const active = rwas.filter((c) => alloc[c] > 0);
+    return run(
+      ["Passkey ile imzala", ...active.map((c) => `USDC → ${c} (path payment)`), `vault.deposit ×${active.length + 1}`],
       async (next) => {
         const ch = await ensure();
         next();
         const total = amt;
-        const husdyUsd = (total * alloc.hUSDY) / 100;
-        const hxauUsd = (total * alloc.hXAU) / 100;
-        const pHusdy = s.prices?.hUSDY ?? 1;
-        const pXau = s.prices?.hXAU ?? 2400;
-        const husdyAmt = husdyUsd / pHusdy;
-        const hxauAmt = hxauUsd / pXau;
-        if (husdyAmt > 0.0000001) await ch.swapUsdcTo("hUSDY", toStroops(husdyAmt.toFixed(7)));
-        next();
-        if (hxauAmt > 0.0000001) await ch.swapUsdcTo("hXAU", toStroops(hxauAmt.toFixed(7)));
-        next();
+        const targets: Partial<Record<RwaCode, number>> = {};
+        for (const c of active) {
+          const price = s.prices?.[c] ?? ASSET_META[c].baseUsd;
+          const units = ((total * alloc[c]) / 100) / price;
+          targets[c] = units;
+          if (units > 0.0000001) await ch.swapUsdcTo(c, toStroops(units.toFixed(7)));
+          next();
+        }
         const b = await ch.balances();
         const usdcLeft = Math.min((total * alloc.USDC) / 100, Number(b.USDC ?? 0n) / 1e7);
         if (usdcLeft > 0.0000001) await ch.deposit(vault, "USDC", toStroops(usdcLeft.toFixed(7)));
-        if (husdyAmt > 0.0000001) await ch.deposit(vault, "hUSDY", toStroops(Math.min(husdyAmt, Number(b.hUSDY ?? 0n) / 1e7).toFixed(7)));
-        if (hxauAmt > 0.0000001) await ch.deposit(vault, "hXAU", toStroops(Math.min(hxauAmt, Number(b.hXAU ?? 0n) / 1e7).toFixed(7)));
+        for (const c of active) {
+          const units = Math.min(targets[c] ?? 0, Number(b[c] ?? 0n) / 1e7);
+          if (units > 0.0000001) await ch.deposit(vault, c, toStroops(units.toFixed(7)));
+        }
         await api.rules(ch.pub, alloc).catch(() => {});
       },
     );
+  };
 
   const cek = () =>
     run(["Passkey ile imzala", `vault.withdraw (${withdrawCode} → cüzdan)`], async (next) => {
@@ -114,13 +121,18 @@ export default function Kazan() {
       await ch.withdraw(vault, withdrawCode, toStroops(amt.toFixed(7)));
     });
 
+  /** Bir varlığın payı değişince kalan pay diğerlerine mevcut oranlarıyla dağıtılır; toplam 100 kalır. */
   const setAllocKey = (k: Code, v: number) => {
-    const others = (["USDC", "hUSDY", "hXAU"] as Code[]).filter((x) => x !== k);
+    const others = codes.filter((x) => x !== k);
     const rest = 100 - v;
-    const otherSum = others.reduce((a, o) => a + alloc[o], 0) || 1;
+    const otherSum = others.reduce((a, o) => a + alloc[o], 0);
     const next = { ...alloc, [k]: v } as Record<Code, number>;
-    next[others[0]!] = Math.round((alloc[others[0]!] / otherSum) * rest);
-    next[others[1]!] = rest - next[others[0]!];
+    let assigned = 0;
+    others.forEach((o, i) => {
+      const share = i === others.length - 1 ? rest - assigned : otherSum > 0 ? Math.round((alloc[o] / otherSum) * rest) : Math.round(rest / others.length);
+      next[o] = Math.max(0, share);
+      assigned += next[o];
+    });
     setAlloc(next);
   };
 
@@ -140,11 +152,11 @@ export default function Kazan() {
           <div key={r.code} className="satir" style={{ padding: "6px 0" }}>
             <div>
               <div style={{ fontWeight: 500 }}>{r.code}</div>
-              <div className="ikincil" style={{ fontSize: 12.5 }}>{r.code === "USDC" ? "Blend supply faizi" : r.code === "hUSDY" ? "Tokenize hazine bonosu · fiyat artar" : "Tokenize altın · değer koruma"} · c {r.c_factor}</div>
+              <div className="ikincil" style={{ fontSize: 12.5 }}>{assetBlurb(r.code)} · c {r.c_factor}</div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="num" style={{ fontWeight: 500 }}>{fmtUsd(r.value)}</div>
-              <div className={`num ${r.apy > 0 ? "zeytin" : "ikincil"}`} style={{ fontSize: 12.5 }}>{fmtNum(r.collateralFloat, r.code === "hXAU" ? 4 : 2)} · {r.apy > 0 ? fmtPct(r.apy) : "APY —"}</div>
+              <div className={`num ${r.apy > 0 ? "zeytin" : "ikincil"}`} style={{ fontSize: 12.5 }}>{fmtNum(r.collateralFloat, ASSET_META[r.code as AssetCode]?.displayDecimals ?? 2)} · {r.apy > 0 ? fmtPct(r.apy) : "APY —"}</div>
             </div>
           </div>
         ))}
@@ -173,20 +185,20 @@ export default function Kazan() {
           <>
             <div className="etiket" style={{ fontSize: 12 }}>Cüzdandaki USDC&apos;yi dağıt</div>
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="USDC" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {(["USDC", "hUSDY", "hXAU"] as Code[]).map((k) => (
+            {codes.map((k) => (
               <div key={k} style={{ marginTop: 12 }}>
-                <div className="satir" style={{ fontSize: 14 }}><span>{k}</span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
+                <div className="satir" style={{ fontSize: 14 }}><span>{k} <span className="ikincil">{ASSET_META[k].name}</span></span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
                 <input type="range" min={0} max={100} value={alloc[k]} onChange={(e) => setAllocKey(k, Number(e.target.value))} />
               </div>
             ))}
-            <div className="ikincil" style={{ fontSize: 13, marginTop: 6 }}>Tek passkey onayı: iki PathPaymentStrictReceive (DEX/AMM) + üç deposit; sponsor hepsine fee-bump uygular.</div>
+            <div className="ikincil" style={{ fontSize: 13, marginTop: 6 }}>Tek passkey onayı: payı olan her RWA için bir PathPaymentStrictReceive (DEX/AMM) + deposit; sponsor hepsine fee-bump uygular.</div>
             <button className="btn btn-sepya" style={{ marginTop: 12 }} disabled={busy || !(amt > 0) || amt > (balances.USDC ?? 0)} onClick={dagit}>Dağılımı uygula</button>
           </>
         )}
         {tab === "cek" && (
           <>
             <div className="cipler">
-              {(["USDC", "hUSDY", "hXAU"] as Code[]).map((k) => <button key={k} className={`cip${withdrawCode === k ? " aktif" : ""}`} onClick={() => setWithdrawCode(k)}>{k}</button>)}
+              {codes.map((k) => <button key={k} className={`cip${withdrawCode === k ? " aktif" : ""}`} onClick={() => setWithdrawCode(k)}>{k}</button>)}
             </div>
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
             <div className="ikincil" style={{ fontSize: 13, marginTop: 10 }}>WithdrawCollateral → cüzdanına gelir. Havuz, sağlık faktörü bozulursa işlemi reddeder.</div>

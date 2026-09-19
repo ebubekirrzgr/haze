@@ -3,10 +3,10 @@
  * aynı değere çeker, (3) SEP-38 TRY/USD kurunu önbelleğe alır.
  *
  * hUSDY: bakiye sabit, fiyat zamanla artar. Demo modunda 1 dakika = YIELD_DAYS_PER_MINUTE gün.
- * hXAU: getiri yok; taban fiyat + küçük rastgele yürüyüş (gerçek XAU/USD beslemesi yoksa).
+ * hXAU, hNVDA, hSHEL, hBMW (RWA): getiri yok; taban fiyat (ASSET_META / <CODE>_USD env) + küçük rastgele yürüyüş.
  */
 import { Asset, Keypair, Operation, TransactionBuilder, BASE_FEE, Horizon } from "@stellar/stellar-sdk";
-import { AnchorClient, fromStroops, toStroops, type HazeConfig } from "@haze/stellar";
+import { AnchorClient, ASSET_META, COLLATERAL_CODES, RWA_CODES, baseUsdOf, fromStroops, isYieldByPrice, toStroops, type CollateralCode, type HazeConfig, type RwaCode } from "@haze/stellar";
 import type { ChainOps } from "../chain.ts";
 import type { Db } from "../db.ts";
 
@@ -14,7 +14,7 @@ export interface PriceDeps {
   cfg: HazeConfig;
   db: Db;
   chain: ChainOps;
-  /** market maker hesabı (hUSDY/hXAU/hTRY envanteri) */
+  /** market maker hesabı (RWA + hTRY envanteri) */
   marketMaker: Keypair;
   /** SEP-38 için SEP-10 kimliği */
   fxSigner: Keypair;
@@ -27,20 +27,24 @@ export interface PriceDeps {
 export class PriceService {
   private startedAt = Date.now();
   private husdyStart = toStroops("1");
-  private xau: bigint;
+  /** rastgele yürüyüşlü RWA fiyatları (SAC → 7 ondalık) */
+  private walk: Partial<Record<RwaCode, bigint>> = {};
   private anchor: AnchorClient;
   private fxAt = 0;
   private timer?: NodeJS.Timeout;
   usdTry?: bigint;
 
   constructor(private readonly d: PriceDeps) {
-    this.xau = d.xauBase ?? toStroops("2400");
     this.anchor = new AnchorClient(d.cfg.anchorHomeDomain, d.cfg.networkPassphrase);
     const saved = d.db.get("prices.startedAt");
     if (saved) this.startedAt = Number(saved);
     else d.db.set("prices.startedAt", String(this.startedAt));
-    const savedXau = d.db.price(d.cfg.assets.hXAU.sac);
-    if (savedXau) this.xau = savedXau;
+    for (const code of RWA_CODES) {
+      if (isYieldByPrice(code)) continue;
+      const base = code === "hXAU" && d.xauBase ? d.xauBase : toStroops(baseUsdOf(code, process.env).toFixed(7));
+      const savedPrice = d.cfg.assets[code].sac ? d.db.price(d.cfg.assets[code].sac) : undefined;
+      this.walk[code] = savedPrice ?? base;
+    }
   }
 
   /** hızlandırılmış zaman: geçen dakika × daysPerMinute gün */
@@ -59,18 +63,31 @@ export class PriceService {
     return this.d.husdyApy;
   }
 
+  /** Kod → 7 ondalık USD fiyatı (COLLATERAL_CODES sırasıyla) */
+  byCode(): Record<CollateralCode, bigint> {
+    const out = {} as Record<CollateralCode, bigint>;
+    for (const code of COLLATERAL_CODES) {
+      out[code] = code === "USDC" ? toStroops("1") : isYieldByPrice(code) ? this.husdyPrice() : (this.walk[code as RwaCode] ?? toStroops(ASSET_META[code].baseUsd.toFixed(7)));
+    }
+    return out;
+  }
+
+  /** SAC → fiyat (oracle / kredi motoru); SAC'ı olmayan varlık atlanır */
   current(): Record<string, bigint> {
-    return {
-      [this.d.cfg.assets.USDC.sac]: toStroops("1"),
-      [this.d.cfg.assets.hUSDY.sac]: this.husdyPrice(),
-      [this.d.cfg.assets.hXAU.sac]: this.xau,
-    };
+    const out: Record<string, bigint> = {};
+    for (const [code, p] of Object.entries(this.byCode())) {
+      const sac = this.d.cfg.assets[code as CollateralCode].sac;
+      if (sac) out[sac] = p;
+    }
+    return out;
   }
 
   async tick(): Promise<void> {
-    // hXAU küçük rastgele yürüyüş (±0,05%)
-    const drift = 1 + (Math.random() - 0.5) * 0.001;
-    this.xau = BigInt(Math.round(Number(this.xau) * drift));
+    // RWA'larda küçük rastgele yürüyüş (±0,05%)
+    for (const code of Object.keys(this.walk) as RwaCode[]) {
+      const drift = 1 + (Math.random() - 0.5) * 0.001;
+      this.walk[code] = BigInt(Math.round(Number(this.walk[code]) * drift));
+    }
     const prices = this.current();
     for (const [asset, p] of Object.entries(prices)) this.d.db.setPrice(asset, p, "bot");
 
@@ -102,10 +119,9 @@ export class PriceService {
     const existing = await server.offers().forAccount(mm.publicKey()).limit(50).call();
     const b = new TransactionBuilder(account, { fee: (Number(BASE_FEE) * 20).toString(), networkPassphrase: cfg.networkPassphrase });
 
-    const pairs: { code: "hUSDY" | "hXAU" | "hTRY"; priceUsd: number; size: string }[] = [
-      { code: "hUSDY", priceUsd: Number(prices[cfg.assets.hUSDY.sac]) / 1e7, size: "5000" },
-      { code: "hXAU", priceUsd: Number(prices[cfg.assets.hXAU.sac]) / 1e7, size: "2" },
-      { code: "hTRY", priceUsd: this.usdTry ? 1 / (Number(this.usdTry) / 1e7) : 0, size: "100000" },
+    const pairs: { code: RwaCode | "hTRY"; priceUsd: number; size: string }[] = [
+      ...RWA_CODES.map((code) => ({ code, priceUsd: cfg.assets[code].sac ? Number(prices[cfg.assets[code].sac] ?? 0n) / 1e7 : 0, size: ASSET_META[code].mmSize })),
+      { code: "hTRY", priceUsd: this.usdTry ? 1 / (Number(this.usdTry) / 1e7) : 0, size: ASSET_META.hTRY.mmSize },
     ];
     // Alış (USDC satan) emirleri hazinenin USDC bakiyesine sığdırılır: bakiyenin MM_USDC_SHARE kadarı
     // (varsayılan %25) teklif defterine ayrılır, kalanı demo kullanıcı / havuz likiditesi için serbest kalır.
@@ -181,18 +197,15 @@ export class PriceService {
   }
 
   toJson() {
-    const p = this.current();
-    const cfg = this.d.cfg;
+    const byCode = Object.fromEntries(Object.entries(this.byCode()).map(([c, p]) => [c, Number(p) / 1e7])) as Record<CollateralCode, number>;
     return {
-      USDC: 1,
-      hUSDY: Number(p[cfg.assets.hUSDY.sac]) / 1e7,
-      hXAU: Number(p[cfg.assets.hXAU.sac]) / 1e7,
+      ...byCode,
       USDTRY: this.usdTry ? Number(this.usdTry) / 1e7 : null,
       husdyApy: this.d.husdyApy,
       daysPerMinute: this.d.daysPerMinute,
       acceleratedDays: this.acceleratedYears() * 365,
       startedAt: this.startedAt,
-      note: "Demo: hUSDY fiyatı hızlandırılmış zamanla artar; hXAU tabana rastgele yürüyüş.",
+      note: "Demo: hUSDY fiyatı hızlandırılmış zamanla artar; hXAU ve tokenize hisseler tabana rastgele yürüyüş.",
     };
   }
 }

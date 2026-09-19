@@ -4,7 +4,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { Keypair, Asset } from "@stellar/stellar-sdk";
-import { buildSponsoredAccountCreation, classicAsset, toStroops, toFloat, usdCentsToUsdc } from "@haze/stellar";
+import { buildSponsoredAccountCreation, classicAsset, toStroops, toFloat, usdCentsToUsdc, ALL_CODES } from "@haze/stellar";
 import type { Env } from "./env.ts";
 import { Db } from "./db.ts";
 import { LiveChain, parseInner, type ChainOps } from "./chain.ts";
@@ -88,7 +88,7 @@ export function buildApp(s: Services) {
   // ---------- onboarding & sponsor ----------
   app.post("/onboard", async (c) => {
     const { publicKey } = await c.req.json<{ publicKey: string }>();
-    const assets = (["USDC", "hUSDY", "hXAU", "hTRY"] as const).filter((k) => cfg.assets[k].issuer).map((k) => classicAsset(cfg.assets[k]));
+    const assets = ALL_CODES.filter((k) => cfg.assets[k]?.issuer).map((k) => classicAsset(cfg.assets[k]));
     const tx = await buildSponsoredAccountCreation(cfg, s.env.sponsor.publicKey(), publicKey, assets);
     tx.sign(s.env.sponsor);
     s.db.upsertUser({ id: publicKey, g_address: publicKey });

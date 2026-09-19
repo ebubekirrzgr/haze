@@ -1,3 +1,4 @@
+import type { AssetCode, CollateralCode } from "@haze/stellar/browser";
 /** haze-api istemcisi */
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
 
@@ -14,7 +15,7 @@ export interface ApiConfig {
   rpcUrl: string;
   horizonUrl: string;
   anchorHomeDomain: string;
-  assets: Record<"USDC" | "hUSDY" | "hXAU" | "hTRY", { code: string; issuer: string; sac: string }>;
+  assets: Record<AssetCode, { code: string; issuer: string; sac: string }>;
   pool: string;
   poolMode: "blend" | "hazecredit";
   vaultFactory: string;
@@ -73,15 +74,12 @@ export interface Notification {
   data: string | null;
   created_at: number;
 }
-export interface Prices {
-  USDC: number;
-  hUSDY: number;
-  hXAU: number;
+export type Prices = Record<CollateralCode, number> & {
   USDTRY: number | null;
   husdyApy: number;
   daysPerMinute: number;
   acceleratedDays: number;
-}
+};
 
 export const api = {
   config: () => req<ApiConfig>("/config"),

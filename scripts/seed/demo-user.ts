@@ -1,9 +1,9 @@
 /**
  * Adım 6 — demo kullanıcı: sponsorlu hesap, vault, önceki aylardan kalma Kazan bakiyesi
- * (USDC + hUSDY + hXAU teminat), maaş allowance'ı, API kaydı, kart ve anchor JWT.
+ * (USDC + tüm RWA'lar teminat; miktarlar ASSET_META.demoAmount), maaş allowance'ı, API kaydı, kart ve anchor JWT.
  * Passkey yerine DEMO_USER_SECRET anahtarı imzalar; PWA'da "demo hesabını içe aktar" ile açılır.
  *
- *   pnpm --filter @haze/scripts demo-user -- [usdc=500] [husdy=300] [hxau=0.1]
+ *   pnpm --filter @haze/scripts demo-user [usdc=500] [husdy=300] [hxau=0.1]   (hisseler ASSET_META.demoAmount)
  * Ortam: API_URL (varsayılan http://localhost:8787) — API çalışmıyorsa API adımları atlanır.
  */
 import { Asset, Operation } from "@stellar/stellar-sdk";
@@ -17,10 +17,14 @@ import {
   classicAsset,
   feeBump,
   toStroops,
+  ALL_CODES,
+  ASSET_META,
+  COLLATERAL_CODES,
+  type CollateralCode,
 } from "@haze/stellar";
 import { ensureTrustline, keyFromEnv, readConfig, submitClassic } from "../lib/common.ts";
 
-const [usdcArg = "500", husdyArg = "300", hxauArg = "0.1"] = process.argv.slice(2);
+const [usdcArg = ASSET_META.USDC.demoAmount, husdyArg = ASSET_META.hUSDY.demoAmount, hxauArg = ASSET_META.hXAU.demoAmount] = process.argv.slice(2);
 const API = process.env.API_URL ?? "http://localhost:8787";
 const cfg = readConfig();
 const sponsor = keyFromEnv("SPONSOR_SECRET");
@@ -31,7 +35,7 @@ const horizon = (await import("../lib/common.ts")).horizon(cfg);
 console.log(`demo kullanıcı: ${user.publicKey()}`);
 
 // 1) sponsorlu hesap (varsa atla)
-const assets = (["USDC", "hUSDY", "hXAU", "hTRY"] as const).filter((k) => cfg.assets[k].issuer).map((k) => classicAsset(cfg.assets[k]));
+const assets = ALL_CODES.filter((k) => cfg.assets[k]?.issuer).map((k) => classicAsset(cfg.assets[k]));
 let exists = false;
 try {
   await horizon.loadAccount(user.publicKey());
@@ -61,17 +65,16 @@ if (!vault) {
   console.log(`✓ vault ${vault} (${r.hash.slice(0, 8)}…)`);
 } else console.log(`  vault zaten var ${vault}`);
 
-// 3) hazine → kullanıcı: USDC, hUSDY, hXAU
-const amounts: [keyof typeof cfg.assets, string][] = [
-  ["USDC", usdcArg],
-  ["hUSDY", husdyArg],
-  ["hXAU", hxauArg],
-];
+// 3) hazine → kullanıcı: USDC + RWA'lar (COLLATERAL_CODES sırası)
+const override: Partial<Record<CollateralCode, string>> = { USDC: usdcArg, hUSDY: husdyArg, hXAU: hxauArg };
+const amounts: [CollateralCode, string][] = COLLATERAL_CODES.filter((c) => cfg.assets[c]?.issuer || c === "USDC")
+  .map((c) => [c, override[c] ?? ASSET_META[c].demoAmount] as [CollateralCode, string])
+  .filter(([, amt]) => Number(amt) > 0);
 const ops = amounts.map(([code, amt]) => Operation.payment({ destination: user.publicKey(), asset: new Asset(cfg.assets[code].code, cfg.assets[code].issuer), amount: Number(amt).toFixed(7) }));
 const h = await submitClassic(cfg, treasury, ops);
 console.log(`✓ hazineden varlıklar gönderildi ${h.slice(0, 8)}…`);
 
-// 4) Kazan'a ekle (deposit ×3) — her biri sahip imzalı, sponsor fee-bump
+// 4) Kazan'a ekle (deposit × varlık sayısı) — her biri sahip imzalı, sponsor fee-bump
 const vc = new VaultClient(soroban, vault);
 for (const [code, amt] of amounts) {
   const { tx } = await vc.deposit(user.publicKey(), cfg.assets[code].sac, toStroops(Number(amt).toFixed(7)));

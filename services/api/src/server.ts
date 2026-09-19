@@ -9,6 +9,9 @@ if (fake) {
   env.cfg.assets.USDC.sac = f.USDC;
   env.cfg.assets.hUSDY.sac = f.HUSDY;
   env.cfg.assets.hXAU.sac = "CHXAU";
+  env.cfg.assets.hNVDA.sac = "CHNVDA";
+  env.cfg.assets.hSHEL.sac = "CHSHEL";
+  env.cfg.assets.hBMW.sac = "CHBMW";
   env.cfg.blend.mode = "hazecredit";
   env.cfg.haze.hazeCredit = "CPOOL";
   env.cfg.haze.vaultFactory = "CFACTORY";

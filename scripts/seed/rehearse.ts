@@ -6,7 +6,7 @@
  * Ortam: API_URL (varsayılan http://localhost:8787). haze-api çalışıyor olmalı.
  *
  * Sahneler: sponsorlu hesap → create_vault → SEP-10 → kart → maaş (SEP-38 + SEP-6 + settle_salary)
- *           → Kazan'dan çek → dağılım (2× path payment + 3× deposit) → kart harcaması → BORROWED → clearing
+ *           → Kazan'dan çek → dağılım (hUSDY/hXAU/hNVDA path payment + deposit) → kart harcaması → BORROWED → clearing
  *           → nakde çevir (hUSDY: vault.withdraw + SEP-38/SEP-6 withdraw-exchange + anchor'a memo'lu path payment)
  */
 import { Asset, Keypair, Networks, TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
@@ -19,6 +19,8 @@ import {
   estimateSendAmount,
   loadBalances,
   toStroops,
+  type CollateralCode,
+  type RwaCode,
 } from "@haze/stellar";
 import { readConfig } from "../lib/common.ts";
 
@@ -47,8 +49,8 @@ async function sponsor(tx: Transaction): Promise<string> {
   const r = await post<{ hash: string }>("/tx/sponsor", { xdr: tx.toXDR() });
   return r.hash;
 }
-const asset = (code: "USDC" | "hUSDY" | "hXAU") => new Asset(cfg.assets[code].code, cfg.assets[code].issuer);
-const sac = (code: "USDC" | "hUSDY" | "hXAU") => cfg.assets[code].sac;
+const asset = (code: CollateralCode) => new Asset(cfg.assets[code].code, cfg.assets[code].issuer);
+const sac = (code: CollateralCode) => cfg.assets[code].sac;
 
 console.log(`prova kullanıcısı: ${pub}\n`);
 
@@ -101,12 +103,13 @@ const { tx: wdTx } = await vaultClient.withdraw(pub, sac("USDC"), toStroops(with
 await sponsor(wdTx);
 log(`✓ vault.withdraw ${withdrawUsdc} USDC → cüzdan`);
 
-// 6) dağılım: %50 USDC / %30 hUSDY / %20 hXAU — 2× path payment (strict receive) + 3× deposit
-const prices = await get<{ hUSDY: number; hXAU: number }>("/prices");
+// 6) dağılım: %40 USDC / %30 hUSDY / %10 hXAU / %20 hNVDA — 3× path payment (strict receive) + 4× deposit
+const prices = await get<Record<string, number>>("/prices");
 const total = Number(withdrawUsdc);
-const husdyAmt = (total * 0.3) / prices.hUSDY;
-const hxauAmt = (total * 0.2) / prices.hXAU;
-for (const [code, amt] of [["hUSDY", husdyAmt], ["hXAU", hxauAmt]] as const) {
+const plan: [RwaCode, number][] = [["hUSDY", 0.3], ["hXAU", 0.1], ["hNVDA", 0.2]];
+for (const [code, share] of plan) {
+  if (!cfg.assets[code]?.issuer) continue;
+  const amt = (total * share) / prices[code]!;
   const dest = toStroops(amt.toFixed(7));
   const est = await estimateSendAmount(cfg, asset("USDC"), asset(code), dest);
   if (!est) throw new Error(`USDC → ${code} yolu yok`);
@@ -115,14 +118,14 @@ for (const [code, amt] of [["hUSDY", husdyAmt], ["hXAU", hxauAmt]] as const) {
   log(`✓ path payment USDC → ${amt.toFixed(6)} ${code} (${h.slice(0, 8)}…)`);
 }
 const bal = await loadBalances(cfg, pub);
-for (const code of ["USDC", "hUSDY", "hXAU"] as const) {
+for (const code of ["USDC", ...plan.map(([c]) => c)] as CollateralCode[]) {
   const amt = bal[code] ?? 0n;
   if (amt <= 0n) continue;
   const { tx } = await vaultClient.deposit(pub, sac(code), amt);
   const h = await sponsor(tx);
   log(`✓ deposit ${Number(amt) / 1e7} ${code} → vault (${h.slice(0, 8)}…)`);
 }
-await post("/rules", { userId: pub, allocation: { USDC: 50, hUSDY: 30, hXAU: 20 } }).catch(() => {});
+await post("/rules", { userId: pub, allocation: { USDC: 40, hUSDY: 30, hXAU: 10, hNVDA: 20 } }).catch(() => {});
 
 // 7) kart harcaması → operatör kuyruğu → BORROWED → clearing
 // Lithic açıksa yetkilendirme Lithic'e gider ve ASA bize asenkron gelir (yanıtta result yok); kapalıysa ASA cevabı doğrudan döner.
@@ -146,7 +149,7 @@ await post("/terminal/clear", { token: ch.token });
 // 8) nakde çevir: hUSDY'den — PWA'daki sıra: teklif → vault.withdraw → hazineye memo'lu path payment (hUSDY → tam USDC) → anchor durumu
 const instr = await post<{ id: string; usdcAmount: string; tryAmount: string; treasury: string; memo: string }>("/cashout/start", { userId: pub, amountTry: Number(cashoutTryArg) });
 const usdcOut = toStroops(Number(instr.usdcAmount).toFixed(7));
-const needHusdy = (Number(instr.usdcAmount) / prices.hUSDY) * 1.01;
+const needHusdy = (Number(instr.usdcAmount) / prices.hUSDY!) * 1.01;
 const { tx: cwTx } = await vaultClient.withdraw(pub, sac("hUSDY"), toStroops(needHusdy.toFixed(7)));
 await sponsor(cwTx);
 const estOut = await estimateSendAmount(cfg, asset("hUSDY"), asset("USDC"), usdcOut);

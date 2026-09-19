@@ -1,4 +1,5 @@
 "use client";
+import { ASSET_META, type AssetCode } from "@haze/stellar/browser";
 import Link from "next/link";
 import { useState } from "react";
 import { Adimlar, DemoRozet, Logo, Sahne, Ust, Yukleniyor } from "@/components/ui.tsx";
@@ -153,7 +154,7 @@ function Dashboard() {
             {live.rows.map((r) => (
               <div key={r.code} className="satir" style={{ fontSize: 14 }}>
                 <span>
-                  {r.code} <span className="ikincil num">{fmtNum(r.collateralFloat, r.code === "hXAU" ? 4 : 2)}</span>
+                  {r.code} <span className="ikincil num">{fmtNum(r.collateralFloat, ASSET_META[r.code as AssetCode]?.displayDecimals ?? 2)}</span>
                 </span>
                 <span className="num">
                   {fmtUsd(r.value)} <span className={r.apy > 0 ? "zeytin" : "ikincil"}>{r.apy > 0 ? fmtPct(r.apy) : "değer koruma"}</span>

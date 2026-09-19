@@ -2,23 +2,7 @@
  * Zincir erişimi tek arayüzün arkasında: modüller `ChainOps` kullanır, testler sahte uygulama verir.
  */
 import { Keypair, TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
-import {
-  FactoryClient,
-  SorobanClient,
-  VaultClient,
-  activeOracle,
-  feeBump,
-  loadPoolState,
-  loadVaultPositions,
-  readAllowance,
-  readBalance,
-  sc,
-  type CardState,
-  type HazeConfig,
-  type PoolState,
-  type PositionAmounts,
-  type DecodedEvent,
-} from "@haze/stellar";
+import { FactoryClient, SorobanClient, VaultClient, activeOracle, feeBump, loadPoolState, loadVaultPositions, readAllowance, readBalance, sc, type CardState, type HazeConfig, type PoolState, type PositionAmounts, type DecodedEvent, COLLATERAL_CODES } from "@haze/stellar";
 import { xdr } from "@stellar/stellar-sdk";
 import type { Env } from "./env.ts";
 
@@ -129,9 +113,9 @@ export class LiveChain implements ChainOps {
   }
   setOraclePrices(assets: string[], prices: bigint[]) {
     if (this.cfg.blend.mode === "blend") {
-      // blend-utils oraclemock: set_price_stable(prices) — sıra set_data'daki varlık sırası (USDC, hUSDY, hXAU)
+      // blend-utils oraclemock: set_price_stable(prices) — sıra set_data'daki varlık sırası = COLLATERAL_CODES
       const admin = this.env.blendAdmin ?? this.env.oracleAdmin;
-      const order = [this.cfg.assets.USDC.sac, this.cfg.assets.hUSDY.sac, this.cfg.assets.hXAU.sac];
+      const order = COLLATERAL_CODES.map((c) => this.cfg.assets[c].sac);
       const ordered = order.map((a) => prices[assets.indexOf(a)] ?? 0n);
       return this.opSend(
         this.soroban.buildInvoke(admin.publicKey(), this.cfg.blend.oracle, "set_price_stable", [sc.vec(ordered.map((p) => sc.i128(p)))]),

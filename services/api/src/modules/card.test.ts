@@ -40,6 +40,16 @@ test("onay: hold PENDING yazılır, kuyruk borcu açar, hold BORROWED olur", asy
   assert.equal(db.notifications("u1").length, 1);
 });
 
+test("boş kuyruk turu sonraki turları kilitlemez (setInterval boşta dönerken gelen hold işlenir)", async () => {
+  const { db, card } = setup();
+  await card.drainQueue(); // boş tur (sunucuda 4 sn'de bir çalışan interval)
+  await card.drainQueue();
+  const res = await card.authorize(asa("auth_after_idle", 500));
+  assert.equal(res.result, "APPROVED");
+  await card.drainQueue();
+  assert.equal(db.hold(res.haze!.authId as string)!.status, "BORROWED");
+});
+
 test("aynı yetkilendirme token'ı ikinci kez reddedilir", async () => {
   const { card } = setup();
   await card.authorize(asa("auth_dup", 100));

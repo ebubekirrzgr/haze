@@ -234,8 +234,11 @@ pnpm --filter @haze/scripts amm           # USDC/hUSDY, USDC/hXAU, USDC/hTRY lik
 pnpm --filter @haze/scripts pool:supply 200   # hazineden HazeCredit'e USDC likiditesi (borçlar havuz bakiyesinden ödenir)
 pnpm dev:api                              # fiyat botu oracle'ı ve teklif defterini güncellemeye başlar
 pnpm --filter @haze/scripts demo-user     # sponsorlu hesap, kasa, teminat, allowance, kart, anchor JWT
+pnpm --filter @haze/scripts rehearse      # tüm istemci akışlarının atılabilir bir anahtarla uçtan uca provası (aşağıda)
 pnpm dev:web && pnpm dev:terminal
 ```
+
+`rehearse` script'i PWA'nın yaptığı her şeyi passkey yerine rastgele bir anahtarla tekrarlar: sponsorlu hesap, kasa, SEP-10, kart, maaş (SEP-38 + SEP-6 + `settle_salary`), çekim, iki path payment, üç yatırma, bir kart yetkilendirmesi ve zincirdeki borcu. Demo öncesi taze bir dağıtımı doğrulamanın en hızlı yolu budur.
 
 Bu noktada demo, HazeCredit havuzuyla uçtan uca çalışır. Kendi Blend v2 dağıtımına geçiş tek adımdır:
 
@@ -300,7 +303,7 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 
 ## Durum ve kapsam
 
-- **Stellar testnet** üzerinde çalışır. Sözleşmeler denetlenmemiştir; gerçek fonlarla kullanılmamalıdır.
+- **Stellar testnet** üzerinde, kendi dağıttığımız **Blend v2** havuzuyla (blend-utils) çalışır; HazeCredit yedek olarak durur. Sözleşmeler denetlenmemiştir; gerçek fonlarla kullanılmamalıdır.
 - **Rise In × Stellar Pro Hackathon 2026** (İstanbul, 19–20 Eylül) için geliştirilmiştir.
 - Düzenleyici ve uyum konuları (kart ihraç lisansı, KYC, kredi mevzuatı) bu prototipte açıkça kapsam dışıdır.
 - Anchor bir mock'tur (`tr-mock-anchor.fly.dev`). hUSDY getirisi hızlandırılmış zamanla fiyat artışı olarak simüle edilir ve demoda böyle ifade edilir.

@@ -17,3 +17,4 @@ test_snapshots/
 *.tsbuildinfo
 packages/bindings/
 .blend-utils/
+services/api/.env.demo-*

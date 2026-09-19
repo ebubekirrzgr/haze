@@ -234,8 +234,11 @@ pnpm --filter @haze/scripts amm           # seed USDC/hUSDY, USDC/hXAU, USDC/hTR
 pnpm --filter @haze/scripts pool:supply 200   # treasury supplies USDC liquidity to HazeCredit (borrows are paid from the pool balance)
 pnpm dev:api                              # price bot starts updating oracle + order book
 pnpm --filter @haze/scripts demo-user     # sponsored account, vault, collateral, allowance, card, anchor JWT
+pnpm --filter @haze/scripts rehearse      # end-to-end smoke test of every client flow with a throwaway key (see below)
 pnpm dev:web && pnpm dev:terminal
 ```
+
+The `rehearse` script replays exactly what the PWA does, signed by a random key instead of a passkey: sponsored account, vault, SEP-10, card, salary (SEP-38 + SEP-6 + `settle_salary`), withdraw, two path payments, three deposits, a card authorization and its on-chain borrow. It is the fastest way to confirm a fresh deployment before a demo.
 
 At this point the demo runs end-to-end on the HazeCredit pool. Switching to a self-hosted Blend v2 deployment is one more step:
 
@@ -300,7 +303,7 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 
 ## Status and scope
 
-- Runs on **Stellar testnet**. Contracts are not audited and must not be used with real funds.
+- Runs on **Stellar testnet** against a self-hosted **Blend v2** pool (deployed with blend-utils); HazeCredit remains the fallback. Contracts are not audited and must not be used with real funds.
 - Built for the **Rise In × Stellar Pro Hackathon 2026** (Istanbul, September 19–20).
 - Regulatory and compliance considerations (card issuing licences, KYC, lending regulation) are explicitly out of scope for this prototype.
 - The anchor is a mock (`tr-mock-anchor.fly.dev`). Yield on hUSDY is simulated as price appreciation under accelerated time and is stated as such in the demo.

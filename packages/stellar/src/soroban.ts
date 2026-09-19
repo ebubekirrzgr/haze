@@ -70,7 +70,8 @@ export class SorobanClient {
     readonly rpcUrl: string,
     readonly passphrase: string,
   ) {
-    this.server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
+    // timeout: asılı kalan bir HTTP isteği operatör kuyruğunu süresiz kilitlemesin (varsayılan: sınırsız)
+    this.server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://"), timeout: 30_000 });
   }
 
   /**
@@ -125,12 +126,22 @@ export class SorobanClient {
 
   /** İmzalı işlemi gönderir ve sonucu bekler. */
   async sendAndWait(tx: Transaction | ReturnType<typeof TransactionBuilder.buildFeeBumpTransaction>): Promise<SendResult> {
-    const sent = await this.server.sendTransaction(tx);
+    // Ağ yoğunken RPC "TRY_AGAIN_LATER" döner; bu bir hata değildir ama hash de ledger'a girmez.
+    // Eskiden bu durumda hiç gelmeyecek hash 40 tur (doğrusal artan, ~14 dk) beklenir ve operatör kuyruğu kilitlenirdi.
+    let sent = await this.server.sendTransaction(tx);
+    for (let i = 1; i <= 4 && sent.status === "TRY_AGAIN_LATER"; i++) {
+      await new Promise((r) => setTimeout(r, 1500 * i));
+      sent = await this.server.sendTransaction(tx);
+    }
     if (sent.status === "ERROR") {
       throw new Error(`sendTransaction ERROR: ${sent.errorResult?.toXDR("base64") ?? "unknown"}`);
     }
+    if (sent.status === "TRY_AGAIN_LATER") {
+      throw new Error("sendTransaction TRY_AGAIN_LATER: ağ yoğun, yeniden denenecek");
+    }
     const hash = sent.hash;
-    const res = await this.server.pollTransaction(hash, { attempts: 40, sleepStrategy: rpc.LinearSleepStrategy });
+    // Sabit 2 sn aralıkla en fazla 30 tur (~60 sn); testnet'te ledger 5-6 sn'de kapanır.
+    const res = await this.server.pollTransaction(hash, { attempts: 30, sleepStrategy: () => 2000 });
     if (res.status === "SUCCESS") {
       return { hash, status: "SUCCESS", returnValue: res.returnValue ? scValToNative(res.returnValue) : undefined, ledger: res.ledger };
     }

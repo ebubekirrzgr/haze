@@ -39,6 +39,7 @@ pnpm dev:terminal                                    # http://localhost:3001 →
 | 6 | `pnpm dev:api` (ayrı terminal) | haze-api: fiyat botu oracle'ı + teklif defterini günceller | `GET /health`, `GET /prices` USDTRY dolu |
 | 7 | `pnpm --filter @haze/scripts demo-user` | Demo kullanıcı: sponsorlu hesap, vault, 500 USDC + 300 hUSDY + 0,1 hXAU teminat, allowance, kart, anchor JWT | `GET /credit/<G>` limit gösteriyor |
 | 8 | `pnpm dev:web`, `pnpm dev:terminal` | PWA + POS | terminal → ONAYLANDI, explorer'da `borrow_for_card` |
+| 8b | `pnpm --filter @haze/scripts rehearse` | PWA akışının tamamını atılabilir anahtarla prova eder (hesap → kasa → maaş → dağılım → kart) | Her satır ✓, son satırda `hold BORROWED` |
 
 **Bu noktada demo HazeCredit (yedek havuz) ile uçtan uca çalışıyor olmalı.** 8. saat kontrol noktası buradan sonrası:
 
@@ -80,3 +81,6 @@ Prova için `DB_PATH` silinip `demo-user` yeniden koşulabilir (vault kalıcıd�
 - Hold `FAILED`: `GET /admin/holds`, `POST /admin/holds/<authId>/retry`.
 - Anchor `pending_trust`: USDC trustline yok — onboarding trustline'ları sponsorlu açar; demo-user için `ensureTrustline`.
 - RPC "needs state restore": kontrat TTL'i dolmuş → `stellar contract restore --id …` (haze-api her çağrıda instance TTL uzatır).
+- Hold uzun süre `PENDING`, `attempts: 0`: operatör kuyruğu bir RPC çağrısında asılı kalmış. Logda `hold … borrow_for_card →` var ama `BORROWED` yoksa RPC; hiç yoksa kuyruk. RPC istemcisinde 30 sn zaman aşımı ve sınırlı bekleme var; en kötü ihtimalle haze-api'yi yeniden başlat, hold ilk turda işlenir.
+- `resource_limit_exceeded` / `tx_insufficient_fee`: SorobanClient simülasyon kaynaklarını %30, ücreti 2× şişirir ve fee-bump iç ücreti kapsar; bunlar görülüyorsa `resourceMargin` / `resourceFeeMultiplier` artırılabilir.
+- Blend moduna geçince eski demo kullanıcı HazeCredit kasasında kalır; `services/api/.env.demo-hazecredit` içinde yedeği var. Yeni demo anahtarı `keys` + `demo-user` ile üretilir.

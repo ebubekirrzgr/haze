@@ -112,14 +112,17 @@ export class CardService {
   /** PENDING hold'ları zincire yazar. En fazla 3 deneme. */
   async drainQueue(): Promise<void> {
     if (this.queueRun) return this.queueRun; // çalışan turu bekle, ikinci tur açma
-    this.queueRun = (async () => {
-      try {
+    // Gövde bir sonraki microtask'ta başlar: kuyruk boşken senkron bitip `finally`nin null yazdığı değeri
+    // aşağıdaki atamanın çözülmüş bir promise ile ezmesini önler (aksi halde kuyruk ilk boş turda kalıcı olarak kilitlenirdi).
+    const run = Promise.resolve()
+      .then(async () => {
         for (const h of this.d.db.holdsByStatus("PENDING")) await this.processHold(h);
-      } finally {
-        this.queueRun = null;
-      }
-    })();
-    return this.queueRun;
+      })
+      .finally(() => {
+        if (this.queueRun === run) this.queueRun = null;
+      });
+    this.queueRun = run;
+    return run;
   }
 
   async processHold(h: HoldRow): Promise<void> {
@@ -127,9 +130,12 @@ export class CardService {
     if (!user?.vault_address) return;
     const current = this.d.db.hold(h.auth_id);
     if (!current || current.status !== "PENDING") return; // indexer önce yazmış olabilir
+    const t0 = Date.now();
+    this.d.log?.(`hold ${h.auth_id.slice(0, 8)} borrow_for_card → ${user.vault_address.slice(0, 8)}… (deneme ${h.attempts + 1})`);
     try {
       const ref = await this.d.chain.borrowForCard(user.vault_address, BigInt(h.usdc_amount), Buffer.from(h.auth_id, "hex"));
       this.markBorrowed(h.auth_id, ref.hash);
+      this.d.log?.(`hold ${h.auth_id.slice(0, 8)} BORROWED ${ref.hash.slice(0, 8)} in ${Date.now() - t0}ms`);
     } catch (e) {
       const attempts = h.attempts + 1;
       const msg = e instanceof Error ? e.message : String(e);

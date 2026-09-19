@@ -5,7 +5,7 @@ import { toStroops } from "@haze/stellar/browser";
 import { Ikon, Sahne, Ust, Yukleniyor } from "@/components/ui.tsx";
 import { api } from "@/lib/api.ts";
 import { useChain, useSession } from "@/lib/session.tsx";
-import { expertTx, fmtNum, fmtUsd } from "@/lib/format.ts";
+import { expertTx, fmtDebt, fmtNum, fmtUsd } from "@/lib/format.ts";
 import { useLang } from "@/lib/i18n.tsx";
 
 export default function Kart() {
@@ -130,7 +130,8 @@ export default function Kart() {
                 <div className={`alt${h.status === "DECLINED" || h.status === "FAILED" ? " kiremit" : ""}`}>{labelHold(h.status)} · {ago(h.created_at)}</div>
               </div>
               <div className="tutar num">
-                −{fmtUsd(Number(h.usdc_amount) / 1e7)}
+                {fmtDebt(h)}
+                {h.debt_asset && h.debt_asset !== "USDC" && <div className="ikincil" style={{ fontSize: 11 }}>≈ {fmtUsd(Number(h.usdc_amount) / 1e7)}</div>}
                 {h.borrow_tx && <div><a href={expertTx(h.borrow_tx)} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>{t("kart.borcIslemi")}</a></div>}
               </div>
             </div>

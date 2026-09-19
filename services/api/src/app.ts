@@ -46,8 +46,9 @@ export function buildServices(env: Env, chain?: ChainOps): Services {
     daysPerMinute: env.yieldAccelerationDaysPerMinute,
     log,
   });
-  const card = new CardService({ db, chain: ch, credit, log, usdTry: () => prices.usdTry });
-  const rules = new RulesService({ db, chain: ch, credit, log });
+  const fiatSac = (code: string) => env.cfg.assets[code as keyof typeof env.cfg.assets]?.sac || undefined;
+  const card = new CardService({ db, chain: ch, credit, log, usdTry: () => prices.usdTry, fiatSac });
+  const rules = new RulesService({ db, chain: ch, credit, log, cfg: env.cfg, priceOf: (code) => prices.byCode()[code as keyof ReturnType<typeof prices.byCode>] });
   const indexer = new Indexer({ db, chain: ch, card, credit, factoryId: env.cfg.haze.vaultFactory, log });
   const anchor = new AnchorService({ cfg: env.cfg, db, rules, log });
   const lithic = env.lithic.enabled ? new LithicClient(env.lithic.apiKey, env.lithic.baseUrl) : undefined;
@@ -279,6 +280,8 @@ export function buildApp(s: Services) {
     const descriptor = `${merchant ?? "KAFE"} ${city ?? "BURSA"} TR`;
     if (s.lithic && !u.card_token.startsWith("demo_")) {
       const card = await s.lithic.getCard(u.card_token);
+      // İşlem para birimi TRY: sandbox merchant_currency'yi bozduğu için (TRY → GBP) ipucu API içinde bırakılır; ASA gelince borç hTRY açılır
+      s.card.setHint(u.card_token, "TRY", Math.round(Number(amountTry) * 100));
       const r = await s.lithic.simulateAuthorize({ pan: card.pan!, amount: cents, descriptor, mcc: mcc ?? "5814" });
       return c.json({ via: "lithic", token: r.token, usdCents: cents, descriptor });
     }
@@ -288,7 +291,8 @@ export function buildApp(s: Services) {
       card_token: u.card_token,
       amount: cents,
       merchant: { descriptor, mcc: mcc ?? "5814", country: "TUR", city: city ?? "BURSA" },
-      merchant_currency: "USD",
+      merchant_currency: "TRY",
+      merchant_amount: Math.round(Number(amountTry) * 100),
       haze_try_amount: Number(amountTry).toFixed(2),
     });
     return c.json({ via: "direct", token, usdCents: cents, usdc: usdCentsToUsdc(cents).toString(), descriptor, ...res });

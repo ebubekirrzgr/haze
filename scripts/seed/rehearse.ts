@@ -143,8 +143,19 @@ for (let i = 0; i < 30 && (status === "PENDING" || status === "NONE"); i++) {
   if (status === "FAILED" || status === "DECLINED") throw new Error(`hold ${status}: ${h?.error ?? ""}`);
 }
 if (status === "NONE") throw new Error("ASA isteği gelmedi (Lithic webhook / tünel?)");
-log(`✓ ASA onaylandı, hold ${status}`);
+const holdRow = (await get<{ lithic_token: string; debt_asset?: string; debt_amount?: string }[]>(`/users/${pub}/holds`)).find((x) => x.lithic_token === ch.token);
+log(`✓ ASA onaylandı, hold ${status} — borç ${holdRow?.debt_amount ? Number(holdRow.debt_amount) / 1e7 : "?"} ${holdRow?.debt_asset ?? "USDC"} (işlem para birimi TRY → hTRY)`);
 await post("/terminal/clear", { token: ch.token });
+
+// 7b) maaş günü kur masası: kart borcu hTRY, maaş USDC → settle_fx ile TL borcu kapanır, karşılığı USDC teminattan alınır
+{
+  const before = (await get<{ reserves: { code: string; liabilitiesFloat: number }[] }>(`/credit/${pub}?fresh=1`)).reserves.find((r) => r.code === "hTRY")?.liabilitiesFloat ?? 0;
+  const sal2 = await post<{ settle: { ok: boolean; reason?: string; detail?: string } }>("/salary/start", { userId: pub, amountTry: 300 });
+  if (!sal2.settle.ok) throw new Error(`2. maaş settle başarısız: ${sal2.settle.reason} ${sal2.settle.detail ?? ""}`);
+  const after = (await get<{ reserves: { code: string; liabilitiesFloat: number }[] }>(`/credit/${pub}?fresh=1`)).reserves.find((r) => r.code === "hTRY")?.liabilitiesFloat ?? 0;
+  log(`✓ maaş günü kur masası: hTRY borcu ${before} → ${after} (300 TL maaş, settle_fx)`);
+  if (before > 0 && after > 0.01) throw new Error("kur masası TL borcunu kapatmadı");
+}
 
 // 8) fiat borç: USD teminata karşı hTRY borç al, sonra fazlasıyla öde (artan geri döner)
 if (cfg.assets.hTRY?.sac) {
@@ -162,11 +173,13 @@ if (cfg.assets.hTRY?.sac) {
 // 9) nakde çevir: hUSDY'den — PWA'daki sıra: teklif → vault.withdraw → hazineye memo'lu path payment (hUSDY → tam USDC) → anchor durumu
 const instr = await post<{ id: string; usdcAmount: string; tryAmount: string; treasury: string; memo: string }>("/cashout/start", { userId: pub, amountTry: Number(cashoutTryArg) });
 const usdcOut = toStroops(Number(instr.usdcAmount).toFixed(7));
-const needHusdy = (Number(instr.usdcAmount) / prices.hUSDY!) * 1.01;
-const { tx: cwTx } = await vaultClient.withdraw(pub, sac("hUSDY"), toStroops(needHusdy.toFixed(7)));
-await sponsor(cwTx);
 const estOut = await estimateSendAmount(cfg, asset("hUSDY"), asset("USDC"), usdcOut);
 if (!estOut) throw new Error("hUSDY → USDC yolu yok");
+// çekilecek miktar DEX tahmininden (+%2): AMM fiyatı oracle'dan sapabilir
+const needHusdyStroops = (estOut.sendAmount * 102n) / 100n + 1n;
+const needHusdy = Number(needHusdyStroops) / 1e7;
+const { tx: cwTx } = await vaultClient.withdraw(pub, sac("hUSDY"), needHusdyStroops);
+await sponsor(cwTx);
 const ppTx = await buildPathPaymentStrictReceive(cfg, pub, { sendAsset: asset("hUSDY"), sendMax: (estOut.sendAmount * 101n) / 100n, destination: instr.treasury, destAsset: asset("USDC"), destAmount: usdcOut, path: estOut.path, memoId: instr.memo });
 const ppHash = await sponsor(ppTx);
 let st = "pending";

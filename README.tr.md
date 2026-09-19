@@ -49,6 +49,8 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 | `hTRY` | Tokenize Türk lirası | Borç alınabilir fiat rezerv, giriş/çıkış bacağı | 0 (borç faktörü 0,85) |
 | `hEUR` `hGBP` `hCHF` `hARS` `hBRL` | Tokenize euro, sterlin, frank, Arjantin pesosu, Brezilya reali | Borç alınabilir fiat rezervler | 0 (borç faktörü 0,85) |
 
+**Kart borcu işlem para birimindedir.** Türkiye'deki bir POS'ta yapılan harcama, TL tutarı kadar `hTRY` borçlandırır (`vault.borrow_for_card_asset`), USDC değil; dolar teminat yerinde kalır, günlük limit USD cinsinden izlenir. Maaş günü kural motoru önce USDC borcunu kapatır, sonra **HAZE kur masası** her fiat borcu kapatır: hazine fiat token'ı vault'a gönderir, `vault.settle_fx` borcu öder ve karşılığı USDC'yi (SEP-38 kuru + %0,5 spread) teminattan alır. Güven varsayımı: kuru operatör belirler; üretim sürümünde sözleşme içinden oracle okunur.
+
 Fiat token'lar **yalnız borç** rezervidir: teminat sayılmazlar, ama dolar cinsi teminata karşı borç alınabilir (`vault.borrow_asset`) ve aynı cinsten ödenir (`vault.repay_asset`). Dolar teminat, lira borç: lira değer kaybettikçe borcun dolar karşılığı küçülür; kur riski borçluda değil, havuza fiat sağlayanlarda. hTRY anchor'ın SEP-38 USD/TRY kurundan fiyatlanır; diğer fiat fiyatları küçük rastgele yürüyüşlü sabit demo tabanlarıdır.
 
 Varlık kümesi tek yerde tanımlıdır: [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) içindeki `ASSET_META` (ad, tür, taban fiyat, risk parametreleri, ihraç ve demo miktarları). İhraç, AMM, havuz rezervleri, fiyat botu, market maker ve PWA bu kayıttan türer; yeni bir gerçek dünya varlığı eklemek tek satır artı havuz rezervlerinin yeniden dağıtımıdır.
@@ -139,6 +141,8 @@ Kullanıcı başına bir kasa. **Sahip**, kullanıcının Stellar hesabıdır. *
 | `repay(amount)` | Sahip | Sahibin USDC'siyle borç öder; fazlası yeniden teminata eklenir |
 | `set_daily_limit(limit)` / `set_frozen(bool)` | Sahip | Zincirde uygulanan kart kontrolleri |
 | `borrow_for_card(amount, auth_id)` | Operatör | Kart yetkilendirmesi için USDC borç açar ve takas hazinesine aktarır. `auth_id` (ihraççı yetkilendirme token'ının SHA-256'sı) üzerinde idempotenttir. Günlük limit ve dondurmayı uygular. |
+| `borrow_for_card_asset(asset, amount, usd_amount, auth_id)` / `refund_for_card_asset(amount, auth_id)` | Operatör | Aynısı, işlem para biriminde (TL harcama → hTRY); `usd_amount` günlük limiti besler |
+| `settle_fx(asset, fiat_amount, usdc_amount)` | Operatör | Maaş günü kur masası: hazinenin vault'a gönderdiği tokenla fiat borcu kapatır, USDC karşılığını teminattan takas hazinesine aktarır |
 | `refund_for_card(amount, auth_id)` | Operatör | İptal / iade: hazinenin geri gönderdiği USDC ile borç öder, günlük sayacı düşürür |
 | `settle_salary(amount, repay_amount)` | Operatör | Sahibin allowance'ı ile maaşı çeker, `repay_amount` kadar borç kapatır, kalanı teminata ekler |
 | `positions()` / `card_state()` / `auth_amount(auth_id)` | Herkes | Okuma görünümleri |
@@ -311,9 +315,9 @@ API, `8787` portunda çalışan bir Hono servisidir. İstek ve yanıt gövdeleri
 | Passkey ile hesap oluştur | PWA | Sponsorlu hesap (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Maaş al | Profil → İşveren paneli | SEP-38 teklif, SEP-6 deposit-exchange, `settle_salary` |
 | Birikimi dağıt | Kazan → Dağılım | Seçilen her varlık için bir `PathPaymentStrictReceive` + her biri için `vault.deposit` |
-| Kafede öde | Terminal → Temassız öde | Zincir dışı ASA onayı, ardından `borrow_for_card` → takas hazinesi |
+| Kafede öde (450 TL) | Terminal → Temassız öde | Zincir dışı ASA onayı, ardından `borrow_for_card_asset(hTRY, 450)` → takas hazinesi; borç lira cinsinden |
 | Altından nakde çevir | Nakde çevir → Altından | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, anchor'a path payment |
-| Maaş günü | Profil → Maaş günü simülasyonu | `settle_salary`: geri ödeme, kalan yeniden teminata |
+| Maaş günü | Profil → Maaş günü simülasyonu | `settle_salary` USDC borcunu kapatır, kalanı teminata; `settle_fx` lira borcunu kur masasıyla kapatır |
 
 ---
 

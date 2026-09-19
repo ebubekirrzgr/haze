@@ -162,6 +162,13 @@ export class Chain {
     return this.signAndSponsor(tx);
   }
 
+  /** DEX yolu: `usdcAmount` USDC almak için kaç `code` gönderilmeli (path payment strict receive tahmini) */
+  async sendAmountFor(code: RwaCode, usdcAmount: bigint): Promise<bigint> {
+    const est = await estimateSendAmount(this.cfg, this.asset(code), this.asset("USDC"), usdcAmount);
+    if (!est) throw new Error(`${code} → USDC yolu bulunamadı`);
+    return est.sendAmount;
+  }
+
   /** Nakde çevirme adım 3a: RWA (hXAU/hUSDY/hisse) gönder, anchor hazinesi tam USDC alsın (memo'lu) */
   async pathPayToAnchor(code: RwaCode, usdcAmount: bigint, treasury: string, memoId: string): Promise<string> {
     const est = await estimateSendAmount(this.cfg, this.asset(code), this.asset("USDC"), usdcAmount);

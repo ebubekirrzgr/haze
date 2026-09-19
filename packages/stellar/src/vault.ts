@@ -75,6 +75,17 @@ export class VaultClient {
   refundForCard(operator: string, amount: bigint, authId: Uint8Array) {
     return this.soroban.buildInvoke(operator, this.vaultId, "refund_for_card", [sc.i128(amount), sc.bytes(authId)]);
   }
+  /** İşlem para biriminde kart borcu (ör. hTRY): amount varlık cinsinden, usdAmount günlük limit için USDC karşılığı */
+  borrowForCardAsset(operator: string, asset: string, amount: bigint, usdAmount: bigint, authId: Uint8Array) {
+    return this.soroban.buildInvoke(operator, this.vaultId, "borrow_for_card_asset", [sc.address(asset), sc.i128(amount), sc.i128(usdAmount), sc.bytes(authId)]);
+  }
+  refundForCardAsset(operator: string, amount: bigint, authId: Uint8Array) {
+    return this.soroban.buildInvoke(operator, this.vaultId, "refund_for_card_asset", [sc.i128(amount), sc.bytes(authId)]);
+  }
+  /** Kur masası: vault'a gelmiş fiat ile borcu kapat, karşılığı USDC teminattan takas hazinesine */
+  settleFx(operator: string, asset: string, fiatAmount: bigint, usdcAmount: bigint) {
+    return this.soroban.buildInvoke(operator, this.vaultId, "settle_fx", [sc.address(asset), sc.i128(fiatAmount), sc.i128(usdcAmount)]);
+  }
   settleSalary(operator: string, amount: bigint, repayAmount: bigint) {
     return this.soroban.buildInvoke(operator, this.vaultId, "settle_salary", [sc.i128(amount), sc.i128(repayAmount)]);
   }

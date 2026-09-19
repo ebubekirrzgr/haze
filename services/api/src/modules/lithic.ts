@@ -39,6 +39,8 @@ export interface AsaRequest {
 export interface LithicAsaRaw extends Partial<AsaRequest> {
   card?: { token?: string; last_four?: string };
   merchant?: AsaRequest["merchant"];
+  /** Lithic: işlem tutarları; merchant.currency işlemin yapıldığı para birimi (ör. TRY), amount o birimin en küçük birimi */
+  amounts?: { merchant?: { amount?: number; currency?: string }; cardholder?: { amount?: number; currency?: string } };
 }
 
 /** Lithic/terminal yükünü tek şemaya indirger. */
@@ -50,6 +52,8 @@ export function normalizeAsaRequest(raw: LithicAsaRaw): { req: AsaRequest; fromL
       ...(raw as AsaRequest),
       card_token: raw.card_token ?? raw.card?.token ?? "",
       merchant: raw.merchant ?? { descriptor: "Unknown merchant" },
+      merchant_currency: raw.amounts?.merchant?.currency ?? raw.merchant_currency,
+      merchant_amount: raw.amounts?.merchant?.amount ?? raw.merchant_amount,
     },
   };
 }
@@ -102,7 +106,7 @@ export class LithicClient {
     return this.call<LithicCard>(`/cards/${token}`, undefined, "GET");
   }
   /** Sandbox: yetkilendirme simülasyonu (USD sent) */
-  simulateAuthorize(params: { pan: string; amount: number; descriptor: string; mcc?: string; merchant_currency?: string }) {
+  simulateAuthorize(params: { pan: string; amount: number; descriptor: string; mcc?: string; merchant_currency?: string; merchant_amount?: number }) {
     return this.call<{ token: string; debugging_request_id: string }>("/simulate/authorize", params);
   }
   simulateClearing(token: string, amount?: number) {

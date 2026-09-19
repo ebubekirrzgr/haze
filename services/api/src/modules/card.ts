@@ -7,7 +7,7 @@
  *   BORROWED --clearing webhook-->                       CLEARED
  *   BORROWED --void webhook-->                           REFUNDED (hazine USDC'yi vault'a iade eder, operatör refund_for_card)
  */
-import { authIdFromToken, toFloat, toHex, usdCentsToUsdc } from "@haze/stellar";
+import { FIAT_BY_CURRENCY, authIdFromToken, currencyOf, toFloat, toHex, usdCentsToUsdc } from "@haze/stellar";
 import type { ChainOps } from "../chain.ts";
 import type { Db, HoldRow } from "../db.ts";
 import type { CreditService } from "./credit.ts";
@@ -20,6 +20,8 @@ export interface CardDeps {
   log?: (msg: string, extra?: unknown) => void;
   /** TL karşılığı için USD→TRY kuru (7 ondalık, 1 USD = x TRY) */
   usdTry?: () => bigint | undefined;
+  /** fiat token kodu → SAC adresi (havuzda rezerv ve ihraç edilmişse), yoksa undefined */
+  fiatSac?: (code: string) => string | undefined;
 }
 
 export const DECLINE_TEXT: Record<string, string> = {
@@ -33,7 +35,23 @@ export const DECLINE_TEXT: Record<string, string> = {
 
 export class CardService {
   private queueRun: Promise<void> | null = null;
+  /**
+   * Terminal ipucu: Lithic sandbox'ı işlem para birimini bozuyor (TRY → GBP, ülke hep USA); haze-terminal Lithic'i
+   * çağırmadan önce "bu kartın sıradaki yetkilendirmesi TRY, tutar X kuruş" der. Gerçek ASA'da Lithic'in kendi
+   * amounts.merchant alanı geçerlidir; ipucu 60 sn içinde tüketilmezse düşer.
+   */
+  private hints = new Map<string, { currency: string; amountMinor: number; at: number }>();
   constructor(private readonly d: CardDeps) {}
+
+  setHint(cardToken: string, currency: string, amountMinor: number) {
+    this.hints.set(cardToken, { currency: currency.toUpperCase(), amountMinor, at: Date.now() });
+  }
+  private takeHint(cardToken: string) {
+    const h = this.hints.get(cardToken);
+    if (!h) return undefined;
+    this.hints.delete(cardToken);
+    return Date.now() - h.at < 60_000 ? h : undefined;
+  }
 
   /** ASA: Lithic (ya da haze-terminal) isteğini yanıtlar. Zincire dokunmaz. */
   async authorize(req: AsaRequest): Promise<AsaResponse> {
@@ -49,6 +67,14 @@ export class CardService {
 
     const merchant = req.merchant?.descriptor ?? "Unknown merchant";
     const merchantTry = req.haze_try_amount ?? this.tryOf(amountUsdc);
+    // İşlem para biriminde borçlan: TRY → hTRY, EUR → hEUR … (rezerv yoksa USDC). Miktar işlem tutarı, USD karşılığı limit için.
+    const hint = this.takeHint(req.card_token);
+    const cur = (hint?.currency ?? req.merchant_currency ?? "USD").toUpperCase();
+    const minor = hint?.amountMinor ?? (req.merchant_amount && req.merchant_amount > 0 ? req.merchant_amount : undefined);
+    const fiatCode = FIAT_BY_CURRENCY[cur];
+    const fiatSac = fiatCode ? this.d.fiatSac?.(fiatCode) : undefined;
+    const debtAsset = fiatSac && minor ? fiatCode! : "USDC";
+    const debtAmount = debtAsset === "USDC" ? amountUsdc : BigInt(Math.round(minor!)) * 100_000n; // en küçük birim (kuruş) → 7 ondalık
 
     if (!decision.approved) {
       this.d.db.insertHold({
@@ -57,6 +83,8 @@ export class CardService {
         user_id: user.id,
         usd_cents: req.amount,
         usdc_amount: amountUsdc.toString(),
+        debt_asset: debtAsset,
+        debt_amount: debtAmount.toString(),
         merchant,
         merchant_try: merchantTry,
         mcc: req.merchant?.mcc ?? null,
@@ -80,6 +108,8 @@ export class CardService {
       user_id: user.id,
       usd_cents: req.amount,
       usdc_amount: amountUsdc.toString(),
+      debt_asset: debtAsset,
+      debt_amount: debtAmount.toString(),
       merchant,
       merchant_try: merchantTry,
       mcc: req.merchant?.mcc ?? null,
@@ -90,10 +120,12 @@ export class CardService {
       user.id,
       "card_approved",
       `${merchant}${merchantTry ? ` · ${merchantTry} TL` : ""}`,
-      `${toFloat(amountUsdc).toFixed(2)} USDC borç · kalan limit ${toFloat(decision.remainingLimit).toFixed(2)} USDC`,
-      { authId, merchant, merchantTry, usdc: amountUsdc.toString(), remainingLimit: decision.remainingLimit.toString() },
+      debtAsset === "USDC"
+        ? `${toFloat(amountUsdc).toFixed(2)} USDC borç · kalan limit ${toFloat(decision.remainingLimit).toFixed(2)} USDC`
+        : `${toFloat(debtAmount).toFixed(2)} ${currencyOf(debtAsset)} borç (${debtAsset}, ≈ ${toFloat(amountUsdc).toFixed(2)} USDC) · kalan limit ${toFloat(decision.remainingLimit).toFixed(2)} USDC`,
+      { authId, merchant, merchantTry, usdc: amountUsdc.toString(), remainingLimit: decision.remainingLimit.toString(), debtAsset, debtAmount: debtAmount.toString() },
     );
-    this.d.log?.(`ASA APPROVED ${merchant} ${toFloat(amountUsdc)} USDC in ${Date.now() - t0}ms`);
+    this.d.log?.(`ASA APPROVED ${merchant} ${toFloat(amountUsdc)} USDC${debtAsset !== "USDC" ? ` (borç ${toFloat(debtAmount)} ${debtAsset})` : ""} in ${Date.now() - t0}ms`);
     // cevaptan sonra borç kuyruğu (await edilmez)
     queueMicrotask(() => void this.drainQueue());
     return {
@@ -133,7 +165,10 @@ export class CardService {
     const t0 = Date.now();
     this.d.log?.(`hold ${h.auth_id.slice(0, 8)} borrow_for_card → ${user.vault_address.slice(0, 8)}… (deneme ${h.attempts + 1})`);
     try {
-      const ref = await this.d.chain.borrowForCard(user.vault_address, BigInt(h.usdc_amount), Buffer.from(h.auth_id, "hex"));
+      const asset = h.debt_asset && h.debt_asset !== "USDC" ? this.d.fiatSac?.(h.debt_asset) : undefined;
+      const ref = asset
+        ? await this.d.chain.borrowForCardAsset(user.vault_address, asset, BigInt(h.debt_amount), BigInt(h.usdc_amount), Buffer.from(h.auth_id, "hex"))
+        : await this.d.chain.borrowForCard(user.vault_address, BigInt(h.usdc_amount), Buffer.from(h.auth_id, "hex"));
       this.markBorrowed(h.auth_id, ref.hash);
       this.d.log?.(`hold ${h.auth_id.slice(0, 8)} BORROWED ${ref.hash.slice(0, 8)} in ${Date.now() - t0}ms`);
     } catch (e) {
@@ -185,11 +220,20 @@ export class CardService {
     const user = this.d.db.user(h.user_id);
     if (!user?.vault_address) return;
     const amount = BigInt(h.usdc_amount);
+    const fiatSac = h.debt_asset && h.debt_asset !== "USDC" ? this.d.fiatSac?.(h.debt_asset) : undefined;
     try {
-      await this.d.chain.settlementRefund(user.vault_address, amount);
-      const ref = await this.d.chain.refundForCard(user.vault_address, amount, Buffer.from(h.auth_id, "hex"));
+      let ref;
+      if (fiatSac) {
+        const fiatAmount = BigInt(h.debt_amount);
+        await this.d.chain.settlementRefundAsset(user.vault_address, fiatSac, fiatAmount);
+        ref = await this.d.chain.refundForCardAsset(user.vault_address, fiatAmount, Buffer.from(h.auth_id, "hex"));
+      } else {
+        await this.d.chain.settlementRefund(user.vault_address, amount);
+        ref = await this.d.chain.refundForCard(user.vault_address, amount, Buffer.from(h.auth_id, "hex"));
+      }
       this.d.db.updateHold(h.auth_id, { status: "REFUNDED", error: null });
-      this.d.db.notify(h.user_id, "card_refunded", `${h.merchant} — iade`, `${toFloat(amount).toFixed(2)} USDC borç kapatıldı`, { authId: h.auth_id, tx: ref.hash });
+      const label = fiatSac ? `${toFloat(BigInt(h.debt_amount)).toFixed(2)} ${h.debt_asset}` : `${toFloat(amount).toFixed(2)} USDC`;
+      this.d.db.notify(h.user_id, "card_refunded", `${h.merchant} — iade`, `${label} borç kapatıldı`, { authId: h.auth_id, tx: ref.hash, debtAsset: h.debt_asset, debtAmount: h.debt_amount });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.d.db.updateHold(h.auth_id, { error: `refund: ${msg}` });

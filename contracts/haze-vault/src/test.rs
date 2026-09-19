@@ -521,3 +521,110 @@ fn owner_can_borrow_and_repay_any_reserve() {
     assert_eq!(husdy.balance(&f.vault_id), 0);
 }
 
+/// Havuza hUSDY likiditesi koy (fiat rezerv modeli: hazine sağlar)
+fn fund_pool_husdy(f: &Fx, amount: i128) {
+    let e = &f.env;
+    e.mock_all_auths();
+    StellarAssetClient::new(e, &f.husdy).mint(&f.treasury, &amount);
+    f.pool.submit(
+        &f.treasury,
+        &f.treasury,
+        &f.treasury,
+        &vec![e, PoolRequest { request_type: REQ_SUPPLY, address: f.husdy.clone(), amount }],
+    );
+    e.set_auths(&[]);
+}
+
+#[test]
+fn card_borrow_in_transaction_currency_then_refund() {
+    let f = setup();
+    let e = &f.env;
+    fund_pool_husdy(&f, 1_000_0000000);
+    owner_deposit(&f, &f.usdc, 1_000_0000000);
+    let husdy = TokenClient::new(e, &f.husdy);
+    let id = auth_id(e, 1);
+
+    // 450 "TL" ≈ 9,18 USDC: borç hUSDY (fiat rolünde), günlük sayaç USDC karşılığı
+    let pos = f
+        .vault
+        .mock_auths(&[MockAuth {
+            address: &f.operator,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "borrow_for_card_asset",
+                args: (f.husdy.clone(), 15_0000000i128, 9_1800000i128, id.clone()).into_val(e),
+                sub_invokes: &[],
+            },
+        }])
+        .borrow_for_card_asset(&f.husdy, &15_0000000, &9_1800000, &id);
+    assert_eq!(pos.liabilities.get(1), Some(15_0000000));
+    assert_eq!(husdy.balance(&f.settlement), 15_0000000);
+    assert_eq!(f.vault.card_state().spent_today, 9_1800000);
+    assert_eq!(f.vault.auth_amount(&id), Some(15_0000000));
+
+    // Void: hazine token'ı geri gönderir, operatör iade eder
+    e.mock_all_auths();
+    husdy.transfer(&f.settlement, &f.vault_id, &15_0000000);
+    e.set_auths(&[]);
+    let pos = f
+        .vault
+        .mock_auths(&[MockAuth {
+            address: &f.operator,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "refund_for_card_asset",
+                args: (15_0000000i128, id.clone()).into_val(e),
+                sub_invokes: &[],
+            },
+        }])
+        .refund_for_card_asset(&15_0000000, &id);
+    assert_eq!(pos.liabilities.get(1).unwrap_or(0), 0);
+    assert_eq!(f.vault.card_state().spent_today, 0);
+    assert_eq!(husdy.balance(&f.vault_id), 0);
+}
+
+#[test]
+fn payday_fx_desk_repays_fiat_debt_from_usdc_collateral() {
+    let f = setup();
+    let e = &f.env;
+    fund_pool_husdy(&f, 1_000_0000000);
+    owner_deposit(&f, &f.usdc, 1_000_0000000);
+    let husdy = TokenClient::new(e, &f.husdy);
+    let usdc = TokenClient::new(e, &f.usdc);
+    let id = auth_id(e, 2);
+    f.vault
+        .mock_auths(&[MockAuth {
+            address: &f.operator,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "borrow_for_card_asset",
+                args: (f.husdy.clone(), 10_0000000i128, 2_0000000i128, id.clone()).into_val(e),
+                sub_invokes: &[],
+            },
+        }])
+        .borrow_for_card_asset(&f.husdy, &10_0000000, &2_0000000, &id);
+
+    // Kur masası: hazine 100 hUSDY'yi vault'a yollar; operatör borcu kapatır, 2 USDC teminattan alır
+    e.mock_all_auths();
+    StellarAssetClient::new(e, &f.husdy).mint(&f.treasury, &10_0000000);
+    husdy.transfer(&f.treasury, &f.vault_id, &10_0000000);
+    e.set_auths(&[]);
+    let settle_before = usdc.balance(&f.settlement);
+    let pos = f
+        .vault
+        .mock_auths(&[MockAuth {
+            address: &f.operator,
+            invoke: &MockAuthInvoke {
+                contract: &f.vault_id,
+                fn_name: "settle_fx",
+                args: (f.husdy.clone(), 10_0000000i128, 2_0000000i128).into_val(e),
+                sub_invokes: &[],
+            },
+        }])
+        .settle_fx(&f.husdy, &10_0000000, &2_0000000);
+    assert_eq!(pos.liabilities.get(1).unwrap_or(0), 0);
+    assert_eq!(pos.collateral.get(0), Some(998_0000000));
+    assert_eq!(usdc.balance(&f.settlement) - settle_before, 2_0000000);
+    assert_eq!(husdy.balance(&f.vault_id), 0);
+}
+

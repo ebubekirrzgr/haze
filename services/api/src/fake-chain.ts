@@ -37,6 +37,19 @@ export class FakeChain implements ChainOps {
     return { hash: "tx" + this.borrowCalls.length };
   }
   async refundForCard(_v: string, amount: bigint) { this.refunds.push(amount); return { hash: "refund" }; }
+  assetBorrows: { vault: string; asset: string; amount: bigint; usdAmount: bigint; authId: string }[] = [];
+  async borrowForCardAsset(vault: string, asset: string, amount: bigint, usdAmount: bigint, authId: Uint8Array) {
+    if (this.failNext > 0) { this.failNext--; throw new Error("rpc timeout"); }
+    this.assetBorrows.push({ vault, asset, amount, usdAmount, authId: Buffer.from(authId).toString("hex") });
+    this.positions = { ...this.positions, liabilities: { ...this.positions.liabilities, [asset]: (this.positions.liabilities[asset] ?? 0n) + amount } };
+    this.card = { ...this.card, spent_today: this.card.spent_today + usdAmount };
+    return { hash: "atx" + this.assetBorrows.length };
+  }
+  async refundForCardAsset(_v: string, amount: bigint) { this.refunds.push(amount); return { hash: "arefund" }; }
+  async settlementRefundAsset() { return { hash: "asref" }; }
+  async treasuryTransfer() { return { hash: "ttr" }; }
+  fxCalls: { asset: string; fiatAmount: bigint; usdcAmount: bigint }[] = [];
+  async settleFx(_v: string, asset: string, fiatAmount: bigint, usdcAmount: bigint) { this.fxCalls.push({ asset, fiatAmount, usdcAmount }); return { hash: "fx" }; }
   async settleSalary() { return { hash: "settle" }; }
   async settlementRefund() { return { hash: "sref" }; }
   async setOraclePrices() { return { hash: "px" }; }

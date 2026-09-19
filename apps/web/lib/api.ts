@@ -60,6 +60,9 @@ export interface Hold {
   lithic_token: string | null;
   usd_cents: number;
   usdc_amount: string;
+  /** borçlanılan varlık (USDC ya da işlem para biriminin token'ı, ör. hTRY) ve miktarı (7 ondalık) */
+  debt_asset?: string;
+  debt_amount?: string;
   merchant: string;
   merchant_try: string | null;
   status: string;

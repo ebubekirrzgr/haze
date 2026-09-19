@@ -57,8 +57,10 @@ export default function Nakit() {
         if (source === "borrow") {
           await ch.borrow(s.vault, usdc);
         } else {
-          const need = (Number(instr.usdcAmount) / price) * 1.01;
-          await ch.withdraw(s.vault, source, toStroops(need.toFixed(7)));
+          // Çekilecek miktar DEX yolundan: AMM fiyatı oracle'dan sapmış olabilir; %2 pay, artan cüzdanda kalır
+          const est = await ch.sendAmountFor(source, usdc);
+          const need = (est * 102n) / 100n + 1n;
+          await ch.withdraw(s.vault, source, need);
         }
         next();
         next(); // teklif zaten alındı

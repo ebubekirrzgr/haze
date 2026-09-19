@@ -23,7 +23,11 @@ export interface HoldRow {
   lithic_token: string | null;
   user_id: string;
   usd_cents: number;
-  usdc_amount: string; // bigint text
+  usdc_amount: string; // bigint text (USD karşılığı, limit sayacı)
+  /** borçlanılan varlık kodu (USDC ya da işlem para biriminin fiat token'ı, ör. hTRY) */
+  debt_asset: string;
+  /** borçlanılan miktar, varlık cinsinden 7 ondalık bigint text */
+  debt_amount: string;
   merchant: string;
   merchant_try: string | null;
   mcc: string | null;
@@ -141,6 +145,15 @@ export class Db {
       );
       CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
     `);
+    // Şema göçü: eski veritabanlarında kart borcunun para birimi sütunları yok
+    for (const [col, def] of [["debt_asset", "TEXT NOT NULL DEFAULT 'USDC'"], ["debt_amount", "TEXT NOT NULL DEFAULT ''"]] as const) {
+      try {
+        this.d.exec(`ALTER TABLE holds ADD COLUMN ${col} ${def}`);
+      } catch {
+        /* sütun zaten var */
+      }
+    }
+    this.d.exec("UPDATE holds SET debt_amount = usdc_amount WHERE debt_amount = ''");
   }
 
   // ---- kv ----
@@ -200,10 +213,10 @@ export class Db {
     const now = Date.now();
     this.d
       .prepare(
-        `INSERT INTO holds(auth_id, lithic_token, user_id, usd_cents, usdc_amount, merchant, merchant_try, mcc, status, created_at, updated_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO holds(auth_id, lithic_token, user_id, usd_cents, usdc_amount, debt_asset, debt_amount, merchant, merchant_try, mcc, status, created_at, updated_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(h.auth_id, h.lithic_token, h.user_id, h.usd_cents, h.usdc_amount, h.merchant, h.merchant_try, h.mcc, h.status, now, now);
+      .run(h.auth_id, h.lithic_token, h.user_id, h.usd_cents, h.usdc_amount, h.debt_asset ?? "USDC", h.debt_amount ?? h.usdc_amount, h.merchant, h.merchant_try, h.mcc, h.status, now, now);
     return this.hold(h.auth_id)!;
   }
   hold(authId: string): HoldRow | undefined {

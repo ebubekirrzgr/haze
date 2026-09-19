@@ -87,6 +87,10 @@ pub enum DataKey {
     Frozen,
     Spent(u64),
     Auth(BytesN<32>),
+    /// İşlem para biriminde açılan kart borcu: varlık (SAC) adresi
+    AuthAsset(BytesN<32>),
+    /// Aynı yetkilendirmenin USDC karşılığı (günlük limit sayacı)
+    AuthUsd(BytesN<32>),
 }
 
 // --- Olaylar (haze-api indexer bunları dinler) ---
@@ -98,6 +102,26 @@ pub struct CardBorrow {
     pub auth_id: BytesN<32>,
     pub amount: i128,
     pub spent_today: i128,
+}
+
+/// İşlem para biriminde (ör. hTRY) açılan kart borcu; CardBorrow ile birlikte yayımlanır.
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CardBorrowAsset {
+    #[topic]
+    pub auth_id: BytesN<32>,
+    pub asset: Address,
+    pub amount: i128,
+    pub usd_amount: i128,
+}
+
+/// Kur masası: fiat borç hazineden gelen token'la kapatıldı, karşılığı USDC teminattan alındı.
+#[contractevent]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FxSettled {
+    pub asset: Address,
+    pub repaid: i128,
+    pub usdc_paid: i128,
 }
 
 #[contractevent]
@@ -402,6 +426,126 @@ impl HazeVault {
             spent_today: new_spent,
         }
         .publish(&env);
+        pos
+    }
+
+    /// Kart yetkilendirmesi için işlem para biriminin token'ını (ör. Türkiye'de hTRY) borç alır ve takas
+    /// hazinesine aktarır: kullanıcı harcadığı para biriminde borçlanır, dolar teminatı yerinde kalır.
+    /// `usd_amount`: günlük limit sayacı için USDC karşılığı (haze-api ASA kararında aynı değeri kullanır).
+    pub fn borrow_for_card_asset(env: Env, asset: Address, amount: i128, usd_amount: i128, auth_id: BytesN<32>) -> Positions {
+        let cfg = Self::config(&env);
+        cfg.operator.require_auth();
+        assert!(amount > 0 && usd_amount > 0, "amount must be positive");
+        Self::bump(&env);
+
+        let frozen: bool = env.storage().instance().get(&DataKey::Frozen).unwrap_or(false);
+        assert!(!frozen, "card frozen");
+        let auth_key = DataKey::Auth(auth_id.clone());
+        assert!(!env.storage().persistent().has(&auth_key), "auth already processed");
+
+        let day = env.ledger().timestamp() / DAY_SECONDS;
+        let spent_key = DataKey::Spent(day);
+        let spent: i128 = env.storage().temporary().get(&spent_key).unwrap_or(0);
+        let limit: i128 = env.storage().instance().get(&DataKey::DailyLimit).unwrap_or(0);
+        let new_spent = spent + usd_amount;
+        assert!(new_spent <= limit, "daily limit exceeded");
+
+        let me = env.current_contract_address();
+        let pos = Self::submit(
+            &env,
+            &cfg,
+            vec![&env, Request { request_type: REQ_BORROW, address: asset.clone(), amount }],
+        );
+        token::Client::new(&env, &asset).transfer(&me, &cfg.settlement, &amount);
+
+        env.storage().temporary().set(&spent_key, &new_spent);
+        env.storage().temporary().extend_ttl(&spent_key, 17280, 17280 * 2);
+        env.storage().persistent().set(&auth_key, &amount);
+        env.storage().persistent().extend_ttl(&auth_key, AUTH_TTL_THRESHOLD, AUTH_TTL_EXTEND);
+        let asset_key = DataKey::AuthAsset(auth_id.clone());
+        env.storage().persistent().set(&asset_key, &asset);
+        env.storage().persistent().extend_ttl(&asset_key, AUTH_TTL_THRESHOLD, AUTH_TTL_EXTEND);
+        let usd_key = DataKey::AuthUsd(auth_id.clone());
+        env.storage().persistent().set(&usd_key, &usd_amount);
+        env.storage().persistent().extend_ttl(&usd_key, AUTH_TTL_THRESHOLD, AUTH_TTL_EXTEND);
+
+        CardBorrow { auth_id: auth_id.clone(), amount: usd_amount, spent_today: new_spent }.publish(&env);
+        CardBorrowAsset { auth_id, asset, amount, usd_amount }.publish(&env);
+        pos
+    }
+
+    /// İade / void (işlem para birimi): takas hazinesi token'ı vault'a geri göndermiş olmalı; borç o
+    /// tokenla ödenir, artan hazineye döner. Günlük sayaç USDC karşılığı kadar düşülür.
+    pub fn refund_for_card_asset(env: Env, amount: i128, auth_id: BytesN<32>) -> Positions {
+        let cfg = Self::config(&env);
+        cfg.operator.require_auth();
+        assert!(amount > 0, "amount must be positive");
+        Self::bump(&env);
+        let auth_key = DataKey::Auth(auth_id.clone());
+        let borrowed: i128 = env.storage().persistent().get(&auth_key).expect("unknown auth");
+        let asset: Address = env.storage().persistent().get(&DataKey::AuthAsset(auth_id.clone())).expect("not an asset auth");
+        let usd_total: i128 = env.storage().persistent().get(&DataKey::AuthUsd(auth_id.clone())).unwrap_or(0);
+        assert!(amount <= borrowed, "refund exceeds borrow");
+        let me = env.current_contract_address();
+        let tok = token::Client::new(&env, &asset);
+        assert!(tok.balance(&me) >= amount, "refund not funded");
+
+        Self::authorize_pool_pull(&env, &cfg, &asset, amount);
+        let pos = Self::submit(
+            &env,
+            &cfg,
+            vec![&env, Request { request_type: REQ_REPAY, address: asset.clone(), amount }],
+        );
+        let leftover = tok.balance(&me);
+        if leftover > 0 {
+            tok.transfer(&me, &cfg.settlement, &leftover);
+        }
+
+        env.storage().persistent().set(&auth_key, &(borrowed - amount));
+        // günlük sayaç: iade oranında USDC karşılığı düşülür
+        let usd_back = if borrowed > 0 { usd_total * amount / borrowed } else { 0 };
+        let day = env.ledger().timestamp() / DAY_SECONDS;
+        let spent_key = DataKey::Spent(day);
+        let spent: i128 = env.storage().temporary().get(&spent_key).unwrap_or(0);
+        let new_spent = if spent > usd_back { spent - usd_back } else { 0 };
+        env.storage().temporary().set(&spent_key, &new_spent);
+
+        CardRefund { auth_id, amount: usd_back }.publish(&env);
+        pos
+    }
+
+    /// Kur masası (maaş günü): hazine `fiat_amount` kadar `asset`'i vault'a göndermiş olmalı; fiat borç bununla
+    /// kapatılır, artan hazineye döner; karşılığı `usdc_amount` USDC teminattan çekilip takas hazinesine gider.
+    /// Operatör kur ve tutarı belirler (SEP-38 kuru); güven varsayımı README'de.
+    pub fn settle_fx(env: Env, asset: Address, fiat_amount: i128, usdc_amount: i128) -> Positions {
+        let cfg = Self::config(&env);
+        cfg.operator.require_auth();
+        assert!(fiat_amount > 0 && usdc_amount >= 0, "bad amounts");
+        Self::bump(&env);
+        let me = env.current_contract_address();
+        let tok = token::Client::new(&env, &asset);
+        let before = tok.balance(&me);
+        assert!(before >= fiat_amount, "fx not funded");
+        Self::authorize_pool_pull(&env, &cfg, &asset, fiat_amount);
+        let mut pos = Self::submit(
+            &env,
+            &cfg,
+            vec![&env, Request { request_type: REQ_REPAY, address: asset.clone(), amount: fiat_amount }],
+        );
+        let after = tok.balance(&me);
+        let repaid = before - after;
+        if after > 0 {
+            tok.transfer(&me, &cfg.settlement, &after);
+        }
+        if usdc_amount > 0 {
+            pos = Self::submit(
+                &env,
+                &cfg,
+                vec![&env, Request { request_type: REQ_WITHDRAW_COLLATERAL, address: cfg.usdc.clone(), amount: usdc_amount }],
+            );
+            token::Client::new(&env, &cfg.usdc).transfer(&me, &cfg.settlement, &usdc_amount);
+        }
+        FxSettled { asset, repaid, usdc_paid: usdc_amount }.publish(&env);
         pos
     }
 

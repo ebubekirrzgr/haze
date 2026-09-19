@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Adimlar, DemoRozet, Logo, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { useSession } from "@/lib/session.tsx";
-import { expertTx, fmtNum, fmtPct, fmtTry, fmtUsd } from "@/lib/format.ts";
+import { expertTx, fmtDebt, fmtNum, fmtPct, fmtTry, fmtUsd } from "@/lib/format.ts";
 import { DilSecici, useLang, type Key } from "@/lib/i18n.tsx";
 
 export default function Home() {
@@ -97,7 +97,7 @@ function Dashboard() {
   const capacity = limit + debt;
   const hf = c?.credit.healthFactor;
   const txs = [
-    ...s.holds.map((h) => ({ key: h.auth_id, ts: h.created_at, title: h.merchant, sub: `${t("ana.kartSatir")} · ${labelHold(h.status)}${h.merchant_try ? ` · ₺${h.merchant_try}` : ""}`, amount: `−${fmtUsd(Number(h.usdc_amount) / 1e7)}`, tx: h.borrow_tx, warn: h.status === "DECLINED" || h.status === "FAILED" })),
+    ...s.holds.map((h) => ({ key: h.auth_id, ts: h.created_at, title: h.merchant, sub: `${t("ana.kartSatir")} · ${labelHold(h.status)}${h.merchant_try ? ` · ₺${h.merchant_try}` : ""}`, amount: fmtDebt(h), tx: h.borrow_tx, warn: h.status === "DECLINED" || h.status === "FAILED" })),
     ...s.notifications.filter((n) => n.kind === "salary_settled").map((n) => ({ key: `n${n.id}`, ts: n.created_at, title: t("ana.maas"), sub: notif(n).body, amount: "", tx: null as string | null, warn: false })),
   ]
     .sort((a, b) => b.ts - a.ts)

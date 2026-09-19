@@ -26,6 +26,15 @@ export interface ChainOps {
   settleSalary(vault: string, amount: bigint, repayAmount: bigint): Promise<TxRef>;
   /** takas hazinesi → vault USDC iadesi (void) */
   settlementRefund(vault: string, amount: bigint): Promise<TxRef>;
+  /** işlem para biriminde kart borcu (ör. hTRY): asset SAC, amount varlık cinsinden, usdAmount limit sayacı */
+  borrowForCardAsset(vault: string, asset: string, amount: bigint, usdAmount: bigint, authId: Uint8Array): Promise<TxRef>;
+  refundForCardAsset(vault: string, amount: bigint, authId: Uint8Array): Promise<TxRef>;
+  /** takas hazinesi → vault: fiat token iadesi (void) */
+  settlementRefundAsset(vault: string, asset: string, amount: bigint): Promise<TxRef>;
+  /** kur masası: hazine fiat token'ı vault'a gönderir */
+  treasuryTransfer(asset: string, to: string, amount: bigint): Promise<TxRef>;
+  /** kur masası: fiat borcu vault'taki tokenla kapat, karşılığı USDC teminattan takas hazinesine */
+  settleFx(vault: string, asset: string, fiatAmount: bigint, usdcAmount: bigint): Promise<TxRef>;
   /** oracle'a toplu fiyat yaz */
   setOraclePrices(assets: string[], prices: bigint[]): Promise<TxRef>;
   /** imzalı iç işlemi sponsor fee-bump ile gönder */
@@ -105,11 +114,24 @@ export class LiveChain implements ChainOps {
     return this.opSend(this.vault(vault).settleSalary(this.env.operator.publicKey(), amount, repayAmount), this.env.operator);
   }
   settlementRefund(vault: string, amount: bigint) {
+    return this.settlementRefundAsset(vault, this.cfg.assets.USDC.sac, amount);
+  }
+  settlementRefundAsset(vault: string, asset: string, amount: bigint) {
     const from = this.env.settlement.publicKey();
-    return this.opSend(
-      this.soroban.buildInvoke(from, this.cfg.assets.USDC.sac, "transfer", [sc.address(from), sc.address(vault), sc.i128(amount)]),
-      this.env.settlement,
-    );
+    return this.opSend(this.soroban.buildInvoke(from, asset, "transfer", [sc.address(from), sc.address(vault), sc.i128(amount)]), this.env.settlement);
+  }
+  borrowForCardAsset(vault: string, asset: string, amount: bigint, usdAmount: bigint, authId: Uint8Array) {
+    return this.opSend(this.vault(vault).borrowForCardAsset(this.env.operator.publicKey(), asset, amount, usdAmount, authId), this.env.operator);
+  }
+  refundForCardAsset(vault: string, amount: bigint, authId: Uint8Array) {
+    return this.opSend(this.vault(vault).refundForCardAsset(this.env.operator.publicKey(), amount, authId), this.env.operator);
+  }
+  treasuryTransfer(asset: string, to: string, amount: bigint) {
+    const from = this.env.treasury.publicKey();
+    return this.opSend(this.soroban.buildInvoke(from, asset, "transfer", [sc.address(from), sc.address(to), sc.i128(amount)]), this.env.treasury);
+  }
+  settleFx(vault: string, asset: string, fiatAmount: bigint, usdcAmount: bigint) {
+    return this.opSend(this.vault(vault).settleFx(this.env.operator.publicKey(), asset, fiatAmount, usdcAmount), this.env.operator);
   }
   setOraclePrices(assets: string[], prices: bigint[]) {
     if (this.cfg.blend.mode === "blend") {

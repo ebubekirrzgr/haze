@@ -6,6 +6,7 @@
  *   pnpm --filter @haze/scripts keys
  */
 import { Asset, Keypair } from "@stellar/stellar-sdk";
+import { FIAT_CODES } from "@haze/stellar";
 import { API_ENV_PATH, ensureTrustline, friendbot, readConfig, readEnvFile, writeConfig, writeEnvFile } from "../lib/common.ts";
 
 const NAMES = ["SPONSOR", "OPERATOR", "ISSUER", "TREASURY", "SETTLEMENT", "ORACLE_ADMIN", "DEMO_USER", "BLEND_ADMIN"] as const;
@@ -33,6 +34,11 @@ const cfg = readConfig();
 console.log("\nUSDC trustline…");
 const usdc = new Asset(cfg.assets.USDC.code, cfg.assets.USDC.issuer);
 for (const n of ["SETTLEMENT", "TREASURY"] as const) await ensureTrustline(cfg, keys[n]!, usdc);
+// Takas hazinesi işlem para biriminde (hTRY, hEUR …) borç alır: ihraç edilmiş her fiat token için trustline
+for (const code of FIAT_CODES) {
+  const a = cfg.assets[code];
+  if (a?.issuer) await ensureTrustline(cfg, keys.SETTLEMENT!, new Asset(a.code, a.issuer));
+}
 
 cfg.accounts.sponsor = keys.SPONSOR!.publicKey();
 cfg.accounts.operator = keys.OPERATOR!.publicKey();

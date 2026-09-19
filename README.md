@@ -49,6 +49,8 @@ The result is a card that lets people keep their savings invested while spending
 | `hTRY` | Tokenized Turkish lira | Borrowable fiat reserve, on/off-ramp leg | 0 (borrow factor 0.85) |
 | `hEUR` `hGBP` `hCHF` `hARS` `hBRL` | Tokenized euro, pound, franc, Argentine peso, Brazilian real | Borrowable fiat reserves | 0 (borrow factor 0.85) |
 
+**Card debt is denominated in the transaction currency.** A purchase at a Turkish POS borrows `hTRY` for the TRY amount (`vault.borrow_for_card_asset`), not USDC; the dollar collateral is untouched and the daily limit is tracked in USD. On payday the salary rule repays USDC debt first, then the **HAZE FX desk** settles every fiat debt: the treasury sends the fiat tokens to the vault, `vault.settle_fx` repays the debt and takes the equivalent USDC (SEP-38 rate plus a 0.5% spread) from collateral. Trust assumption: the operator sets that rate; a production version would read it from an oracle inside the contract.
+
 Fiat tokens are **borrow-only** reserves: they never count as collateral, but a user can borrow them against USD-denominated collateral (`vault.borrow_asset`) and repay in kind (`vault.repay_asset`). Dollar collateral, lira debt: as the lira weakens the debt shrinks in dollar terms, so the FX risk sits with the pool's fiat suppliers rather than the borrower. hTRY is priced from the anchor's SEP-38 USD/TRY rate; the other fiat prices are static demo bases with a tiny random walk.
 
 The asset set is defined once in [`packages/stellar/src/config.ts`](packages/stellar/src/config.ts) (`ASSET_META`): name, kind, base price, risk parameters, issuance and demo amounts. Issuance, AMM seeding, pool reserves, the price bot, the market maker and the PWA all derive from that registry, so adding another real-world asset is a one-line change plus a redeploy of the pool reserves.
@@ -139,6 +141,8 @@ One vault per user. The **owner** is the user's Stellar account. The **operator*
 | `repay(amount)` | Owner | Repay debt with owner's USDC; any excess is re-supplied as collateral |
 | `set_daily_limit(limit)` / `set_frozen(bool)` | Owner | Card controls enforced on-chain |
 | `borrow_for_card(amount, auth_id)` | Operator | Borrow USDC for a card authorization and transfer to the settlement treasury. Idempotent on `auth_id` (SHA-256 of the issuer authorization token). Enforces daily limit and freeze. |
+| `borrow_for_card_asset(asset, amount, usd_amount, auth_id)` / `refund_for_card_asset(amount, auth_id)` | Operator | Same, but in the transaction currency (e.g. hTRY for a TRY purchase); `usd_amount` feeds the daily limit |
+| `settle_fx(asset, fiat_amount, usdc_amount)` | Operator | Payday FX desk: repay a fiat debt with tokens the treasury sent to the vault, move the USDC equivalent from collateral to settlement |
 | `refund_for_card(amount, auth_id)` | Operator | Void / refund: repay with USDC returned by the treasury, decrement the daily counter |
 | `settle_salary(amount, repay_amount)` | Operator | Pull salary via the owner's allowance, repay debt up to `repay_amount`, supply the remainder as collateral |
 | `positions()` / `card_state()` / `auth_amount(auth_id)` | Anyone | Read views |
@@ -311,9 +315,9 @@ The API is a Hono service on port `8787`. All amounts in request and response bo
 | Create account with a passkey | PWA | Sponsored account (0 XLM), `VaultFactory.create_vault`, SEP-10 |
 | Receive salary | Profile → Employer panel | SEP-38 quote, SEP-6 deposit-exchange, `settle_salary` |
 | Allocate savings | Earn → Allocation | One `PathPaymentStrictReceive` per chosen asset + `vault.deposit` for each |
-| Pay at a café | Terminal → Contactless pay | ASA answered off-chain, then `borrow_for_card` → settlement treasury |
+| Pay at a café (450 TRY) | Terminal → Contactless pay | ASA answered off-chain, then `borrow_for_card_asset(hTRY, 450)` → settlement treasury; debt is in lira |
 | Cash out from gold | Cash out → From gold | `vault.withdraw(hXAU)`, SEP-6 withdraw-exchange, path payment to anchor |
-| Payday | Profile → Simulate payday | `settle_salary`: repay, then re-supply the remainder as collateral |
+| Payday | Profile → Simulate payday | `settle_salary` repays USDC debt and re-supplies the rest; `settle_fx` closes the lira debt via the FX desk |
 
 ---
 

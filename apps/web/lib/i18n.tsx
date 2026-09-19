@@ -196,6 +196,9 @@ const STR = {
   "bildirim.salary_settled.bodyNoDebt": { tr: "{added} USDC Kazan'a eklendi. RWA dağılımını onayla.", en: "{added} USDC added to Earn. Approve your RWA allocation.", pt: "{added} USDC adicionados ao Rendimento. Aprove sua alocação em RWA.", es: "{added} USDC añadidos a Rendimiento. Aprueba tu asignación en RWA." },
   "bildirim.card_approved": { tr: "Kart onaylandı", en: "Card approved", pt: "Cartão aprovado", es: "Tarjeta aprobada" },
   "bildirim.card_approved.body": { tr: "{usdc} USDC borç · kalan limit {limit} USDC", en: "{usdc} USDC borrowed · {limit} USDC limit left", pt: "{usdc} USDC emprestados · {limit} USDC de limite restante", es: "{usdc} USDC prestados · {limit} USDC de límite restante" },
+  "bildirim.card_approved.bodyFiat": { tr: "{amt} {code} borç (≈ {usdc} USDC) · kalan limit {limit} USDC", en: "{amt} {code} borrowed (≈ {usdc} USDC) · {limit} USDC limit left", pt: "{amt} {code} emprestados (≈ {usdc} USDC) · {limit} USDC de limite restante", es: "{amt} {code} prestados (≈ {usdc} USDC) · {limit} USDC de límite restante" },
+  "bildirim.fx_settled": { tr: "Kur masası: fiat borç kapandı", en: "FX desk: fiat debt repaid", pt: "Mesa de câmbio: dívida em moeda quitada", es: "Mesa de cambio: deuda en divisa liquidada" },
+  "bildirim.fx_settled.body": { tr: "{fiat} {code} borcu maaştan ödendi (≈ {usdc} USDC)", en: "{fiat} {code} debt repaid from salary (≈ {usdc} USDC)", pt: "Dívida de {fiat} {code} quitada com o salário (≈ {usdc} USDC)", es: "Deuda de {fiat} {code} pagada con el salario (≈ {usdc} USDC)" },
   "bildirim.card_declined": { tr: "Kart reddedildi", en: "Card declined", pt: "Cartão recusado", es: "Tarjeta rechazada" },
   "bildirim.card_refunded": { tr: "İade", en: "Refund", pt: "Estorno", es: "Reembolso" },
   "bildirim.hold_failed": { tr: "Borç işlemi başarısız", en: "Borrow transaction failed", pt: "A transação de empréstimo falhou", es: "La transacción de préstamo falló" },
@@ -293,7 +296,14 @@ export function LangProvider({ children }: { children: ReactNode }) {
         return { title, body: repaid > 0 ? t("bildirim.salary_settled.body", { repaid: f7(data.repaid)!, added: f7(data.added)! }) : t("bildirim.salary_settled.bodyNoDebt", { added: f7(data.added)! }) };
       }
       if (n.kind === "card_approved" && data.usdc != null) {
-        return { title: `${data.merchant ?? title}${data.merchantTry ? ` · ₺${data.merchantTry}` : ""}`, body: t("bildirim.card_approved.body", { usdc: f7(data.usdc)!, limit: f7(data.remainingLimit) ?? "" }) };
+        const ttl = `${data.merchant ?? title}${data.merchantTry ? ` · ₺${data.merchantTry}` : ""}`;
+        if (data.debtAsset && data.debtAsset !== "USDC" && data.debtAmount != null) {
+          return { title: ttl, body: t("bildirim.card_approved.bodyFiat", { amt: f7(data.debtAmount)!, code: String(data.debtAsset), usdc: f7(data.usdc)!, limit: f7(data.remainingLimit) ?? "" }) };
+        }
+        return { title: ttl, body: t("bildirim.card_approved.body", { usdc: f7(data.usdc)!, limit: f7(data.remainingLimit) ?? "" }) };
+      }
+      if (n.kind === "fx_settled" && data.fiat != null) {
+        return { title: t("bildirim.fx_settled"), body: t("bildirim.fx_settled.body", { fiat: f7(data.fiat)!, code: String(data.code), usdc: f7(data.usdc)! }) };
       }
       return { title, body: n.body };
     };

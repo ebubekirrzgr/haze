@@ -88,6 +88,8 @@ Prova için `DB_PATH` silinip `demo-user` yeniden koşulabilir (vault kalıcıd�
 - Hold `FAILED`: `GET /admin/holds`, `POST /admin/holds/<authId>/retry`.
 - Anchor `pending_trust`: USDC trustline yok — onboarding trustline'ları sponsorlu açar; demo-user için `ensureTrustline`.
 - RPC "needs state restore": kontrat TTL'i dolmuş → `stellar contract restore --id …` (haze-api her çağrıda instance TTL uzatır).
+- Lithic sandbox işlem para birimini bozar (TRY → GBP, ülke USA): terminal Lithic'i çağırmadan önce API'ye `setHint(kart, TRY, kuruş)` bırakır, ASA gelince borç hTRY açılır. Gerçek ASA'da Lithic'in `amounts.merchant` alanı kullanılır.
+- Takas hazinesi (SETTLEMENT) her fiat token için trustline ister; `keys` script'i açar. Yoksa `borrow_for_card_asset` "trustline entry is missing" ile düşer.
 - Hold uzun süre `PENDING`, `attempts: 0`: operatör kuyruğu bir RPC çağrısında asılı kalmış. Logda `hold … borrow_for_card →` var ama `BORROWED` yoksa RPC; hiç yoksa kuyruk. RPC istemcisinde 30 sn zaman aşımı ve sınırlı bekleme var; en kötü ihtimalle haze-api'yi yeniden başlat, hold ilk turda işlenir.
 - `resource_limit_exceeded` / `tx_insufficient_fee`: SorobanClient simülasyon kaynaklarını %30, ücreti 2× şişirir ve fee-bump iç ücreti kapsar; bunlar görülüyorsa `resourceMargin` / `resourceFeeMultiplier` artırılabilir.
 - Blend moduna geçince eski demo kullanıcı HazeCredit kasasında kalır; `services/api/.env.demo-hazecredit` içinde yedeği var. Yeni demo anahtarı `keys` + `demo-user` ile üretilir.

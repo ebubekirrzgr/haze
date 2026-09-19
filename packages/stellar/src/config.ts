@@ -63,6 +63,12 @@ export const BORROWABLE_CODES: ("USDC" | FiatCode)[] = ["USDC", ...FIAT_CODES];
 export const ISSUED_CODES: Exclude<AssetCode, "USDC">[] = ["hUSDY", "hXAU", "hNVDA", "hSHEL", "hBMW", ...FIAT_CODES];
 export const ALL_CODES: AssetCode[] = ["USDC", ...ISSUED_CODES];
 
+/** ISO para birimi → fiat token (kartla harcanan para biriminde borçlanma). */
+export const FIAT_BY_CURRENCY: Record<string, FiatCode> = { TRY: "hTRY", EUR: "hEUR", GBP: "hGBP", CHF: "hCHF", ARS: "hARS", BRL: "hBRL" };
+/** Fiat token → ISO para birimi */
+export function currencyOf(code: string): string {
+  return Object.entries(FIAT_BY_CURRENCY).find(([, c]) => c === code)?.[0] ?? (code === "USDC" ? "USD" : code);
+}
 /** Fiyatı zamanla artan (getiri = fiyat eğimi) varlıklar; diğer RWA'lar taban fiyat + rastgele yürüyüş. */
 export function isYieldByPrice(code: string): boolean {
   return ASSET_META[code as AssetCode]?.kind === "treasury";

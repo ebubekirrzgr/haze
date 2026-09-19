@@ -62,6 +62,10 @@ input { font: inherit; color: inherit; }
 .vlogo-harf { display: none; font-family: "Space Grotesk", sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; color: var(--sepya); }
 .vlogo-bos .vlogo-harf { display: block; }
 .vlogo-satir { display: inline-flex; align-items: center; gap: 10px; }
+/* Dil seçici */
+.dil { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: rgba(59,50,38,0.08); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+.dil-btn { padding: 4px 9px; border-radius: 999px; color: inherit; opacity: 0.6; }
+.dil-btn.aktif { background: var(--sepya); color: var(--krem); opacity: 1; }
 .ayrac { height: 1px; background: rgba(59,50,38,0.1); margin: 12px 0; }
 
 /* Butonlar — ana butonlar 64px, başparmak bölgesi */

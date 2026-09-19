@@ -30,7 +30,7 @@ Sonuç: birikimini yatırımda tutarken ona karşı harcayabilen bir kart. Kulla
 
 | Ekran | Ne olur |
 |---|---|
-| **Hesap açma** | Passkey ile hesap oluşur. Rezervler sponsorludur, ücretler fee-bump ile ödenir, deterministik bir kasa dağıtılır. Kullanıcı XLM'e hiç dokunmaz. |
+| **Hesap açma** | Türkçe veya İngilizce arayüz (otomatik algılanır, profil sayfasından değiştirilir). Passkey ile hesap oluşur. Rezervler sponsorludur, ücretler fee-bump ile ödenir, deterministik bir kasa dağıtılır. Kullanıcı XLM'e hiç dokunmaz. |
 | **Kazan** | Gelen maaş (SEP-6 anchor üzerinden) tek passkey onayıyla USDC, tokenize hazine bonosu, altın ve hisseler (NVIDIA, Shell, BMW) arasında dağıtılır. |
 | **Kart** | Temassız ödeme zincir dışında onaylanır: önbellekteki pozisyonlarla milisaniyeler, soğuk okumada yaklaşık bir saniye. Zincirdeki borç birkaç saniye sonra operatör kuyruğundan açılır. |
 | **Nakde çevir** | Altta yatan varlık satılmadan, path payment ve anchor çekimi ile banka hesabına yerel para birimiyle çekim yapılır. |

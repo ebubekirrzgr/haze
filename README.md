@@ -30,7 +30,7 @@ The result is a card that lets people keep their savings invested while spending
 
 | Screen | What happens |
 |---|---|
-| **Onboarding** | A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
+| **Onboarding** | Turkish or English interface (auto-detected, switchable on the profile page). A passkey creates the account. Reserves are sponsored, fees are fee-bumped, and a deterministic vault is deployed. The user never touches XLM. |
 | **Earn** | Incoming salary (via a SEP-6 anchor) is split across USDC, tokenized treasuries, gold and stocks (NVIDIA, Shell, BMW) with a single passkey approval. |
 | **Card** | Contactless payments are authorized off-chain, in milliseconds from cached positions and about a second on a cold read. The on-chain borrow follows seconds later from an operator queue. |
 | **Cash out** | Withdraw to a bank account in local currency without selling the underlying asset, via path payment and anchor withdrawal. |

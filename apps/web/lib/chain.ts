@@ -68,19 +68,19 @@ export class Chain {
   // ---- onboarding ----
   static async onboard(cfgApi: ApiConfig, kp: Keypair, onStep?: (s: string) => void): Promise<{ vault: string }> {
     const chain = new Chain(cfgApi, kp);
-    onStep?.("Sponsorlu hesap açılıyor");
+    onStep?.("adim.sponsorlu");
     const { xdr } = await api.onboard(kp.publicKey());
     const tx = TransactionBuilder.fromXDR(xdr, cfgApi.networkPassphrase) as Transaction;
     tx.sign(kp);
     await api.onboardSubmit(tx.toXDR());
-    onStep?.("Kasa (vault) kuruluyor");
+    onStep?.("adim.vault");
     const factory = new FactoryClient(chain.soroban, cfgApi.vaultFactory);
     const { tx: ctx } = await factory.createVault(kp.publicKey());
     await chain.signAndSponsor(ctx);
     const reg = await api.registerVault(kp.publicKey());
-    onStep?.("Anchor kimliği (SEP-10)");
+    onStep?.("adim.sep10");
     await chain.anchorLogin();
-    onStep?.("Kart oluşturuluyor");
+    onStep?.("adim.kart");
     await api.cardCreate(kp.publicKey());
     return { vault: reg.vaultAddress };
   }

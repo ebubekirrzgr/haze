@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Adimlar, DemoRozet, Logo, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { useSession } from "@/lib/session.tsx";
-import { ago, expertTx, fmtNum, fmtPct, fmtTry, fmtUsd, labelHold } from "@/lib/format.ts";
+import { expertTx, fmtNum, fmtPct, fmtTry, fmtUsd } from "@/lib/format.ts";
+import { DilSecici, useLang, type Key } from "@/lib/i18n.tsx";
 
 export default function Home() {
   const s = useSession();
@@ -21,6 +22,7 @@ function Onboarding() {
   const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [secret, setSecret] = useState("");
+  const { t } = useLang();
 
   const run = async (fn: (onStep: (s: string) => void) => Promise<void>) => {
     setError(undefined);
@@ -28,7 +30,7 @@ function Onboarding() {
     setStep(0);
     try {
       await fn((label) => {
-        setSteps((x) => [...x, label]);
+        setSteps((x) => [...x, label.startsWith("adim.") ? t(label as Key) : label]);
         setStep((x) => x + 1);
       });
     } catch (e) {
@@ -38,54 +40,55 @@ function Onboarding() {
 
   return (
     <Sahne koyu nav={false}>
-      <div className="ust"><div /><DemoRozet /></div>
+      <div className="ust"><DilSecici koyu /><DemoRozet /></div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, padding: "0 6px" }}>
         <Logo width={190} animate />
-        <div className="vurgu" style={{ fontSize: 21, color: "#D8CBB2" }}>Arkada akış, önde sakinlik.</div>
+        <div className="vurgu" style={{ fontSize: 21, color: "#D8CBB2" }}>{t("on.slogan")}</div>
       </div>
       <div style={{ padding: "0 6px" }}>
         <div className="disp" style={{ fontSize: 22, lineHeight: 1.3, color: "var(--krem)" }}>
-          Birikimin satılmaz,
+          {t("on.baslik1")}
           <br />
-          kartın harcar.
+          {t("on.baslik2")}
         </div>
         <div style={{ fontSize: 14, lineHeight: 1.5, color: "#D8CBB2", marginTop: 8 }}>
-          Maaşın USDC, tokenize bono ve altın olarak getiri üretir; kartla harcadığında teminatına karşı borç açılır, maaş günü kendiliğinden kapanır.
+          {t("on.aciklama")}
         </div>
         <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10, fontSize: 14, color: "var(--krem)" }}>
-          {["Satmadan harca: teminat yerinde kalır", "Getiri harcarken de işler", "Cüzdanında XLM tutman gerekmez"].map((t) => (
-            <div key={t} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {[t("on.m1"), t("on.m2"), t("on.m3")].map((m) => (
+            <div key={m} style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ width: 32, height: 32, borderRadius: 16, background: "rgba(200,162,74,0.18)", color: "var(--altin)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✓</span>
-              {t}
+              {m}
             </div>
           ))}
         </div>
       </div>
-      {!s.apiOk && <div className="cam-sicak kart" style={{ marginTop: 16, color: "var(--kiremit)", fontSize: 14 }}>haze-api'ye ulaşılamıyor. `pnpm dev:api` çalışıyor mu?</div>}
+      {!s.apiOk && <div className="cam-sicak kart" style={{ marginTop: 16, color: "var(--kiremit)", fontSize: 14 }}>{t("on.apiYok")}</div>}
       {mode === "import" ? (
         <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-          <input className="girdi" placeholder="Demo hesabı gizli anahtarı (S…)" value={secret} onChange={(e) => setSecret(e.target.value)} />
+          <input className="girdi" placeholder={t("on.gizliAnahtar")} value={secret} onChange={(e) => setSecret(e.target.value)} />
           <button className="btn btn-altin" disabled={!secret.startsWith("S") || steps.length > 0 && !error} onClick={() => run((o) => s.importSecret(secret, o))}>
-            İçe aktar
+            {t("on.iceAktar")}
           </button>
-          <button className="btn btn-metin" style={{ color: "var(--krem)" }} onClick={() => setMode("idle")}>Vazgeç</button>
+          <button className="btn btn-metin" style={{ color: "var(--krem)" }} onClick={() => setMode("idle")}>{t("on.vazgec")}</button>
         </div>
       ) : (
         <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 6 }}>
           <button className="btn btn-altin" disabled={!s.apiOk || (steps.length > 0 && !error)} onClick={() => { setMode("create"); void run((o) => s.createAccount(o)); }}>
-            Passkey ile hesap oluştur
+            {t("on.passkeyOlustur")}
           </button>
-          <button className="btn btn-metin" style={{ color: "var(--krem)" }} onClick={() => setMode("import")}>Demo hesabını içe aktar</button>
+          <button className="btn btn-metin" style={{ color: "var(--krem)" }} onClick={() => setMode("import")}>{t("on.demoIceAktar")}</button>
         </div>
       )}
       {steps.length > 0 && <Adimlar steps={steps} current={error ? step - 1 : step} error={error} />}
-      <div className="etiket" style={{ textAlign: "center", padding: "18px 0 26px", color: "#A8997E", fontSize: 11 }}>Stellar üzerinde çalışır</div>
+      <div className="etiket" style={{ textAlign: "center", padding: "18px 0 26px", color: "#A8997E", fontSize: 11 }}>{t("on.stellar")}</div>
     </Sahne>
   );
 }
 
 function Dashboard() {
   const s = useSession();
+  const { t, labelHold, ago, notif } = useLang();
   const live = useLiveYield(s.credit, s.prices);
   const c = s.credit;
   const usdTry = s.prices?.USDTRY ?? 0;
@@ -94,8 +97,8 @@ function Dashboard() {
   const capacity = limit + debt;
   const hf = c?.credit.healthFactor;
   const txs = [
-    ...s.holds.map((h) => ({ key: h.auth_id, ts: h.created_at, title: h.merchant, sub: `Kart · ${labelHold(h.status)}${h.merchant_try ? ` · ₺${h.merchant_try}` : ""}`, amount: `−${fmtUsd(Number(h.usdc_amount) / 1e7)}`, tx: h.borrow_tx, warn: h.status === "DECLINED" || h.status === "FAILED" })),
-    ...s.notifications.filter((n) => n.kind === "salary_settled").map((n) => ({ key: `n${n.id}`, ts: n.created_at, title: "Maaş", sub: n.body, amount: "", tx: null as string | null, warn: false })),
+    ...s.holds.map((h) => ({ key: h.auth_id, ts: h.created_at, title: h.merchant, sub: `${t("ana.kartSatir")} · ${labelHold(h.status)}${h.merchant_try ? ` · ₺${h.merchant_try}` : ""}`, amount: `−${fmtUsd(Number(h.usdc_amount) / 1e7)}`, tx: h.borrow_tx, warn: h.status === "DECLINED" || h.status === "FAILED" })),
+    ...s.notifications.filter((n) => n.kind === "salary_settled").map((n) => ({ key: `n${n.id}`, ts: n.created_at, title: t("ana.maas"), sub: notif(n).body, amount: "", tx: null as string | null, warn: false })),
   ]
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 8);
@@ -104,14 +107,14 @@ function Dashboard() {
     <Sahne>
       <Ust />
       <div style={{ paddingTop: 14 }}>
-        <div className="etiket" style={{ fontSize: 12 }}>Kazan · toplam değer</div>
+        <div className="etiket" style={{ fontSize: 12 }}>{t("ana.toplam")}</div>
         {c && live ? (
           <>
             <div className="disp num" style={{ fontSize: 32, lineHeight: 1.15 }}>{fmtUsd(live.liveValue)}</div>
             <div style={{ display: "flex", gap: 10, fontSize: 13, marginTop: 2 }}>
               <span className="num ikincil">≈ {usdTry ? fmtTry(live.liveValue * usdTry) : "…"}</span>
-              <span className="zeytin num" style={{ fontWeight: 600 }}>{fmtPct(live.netApy)} yıllık</span>
-              <span className="num ikincil">+{fmtNum(live.earned, 4)} $ bu oturumda</span>
+              <span className="zeytin num" style={{ fontWeight: 600 }}>{fmtPct(live.netApy)} {t("genel.yillik")}</span>
+              <span className="num ikincil">+{fmtNum(live.earned, 4)} $ {t("ana.buOturum")}</span>
             </div>
           </>
         ) : (
@@ -122,11 +125,11 @@ function Dashboard() {
       <div className="blok cam kart">
         <div className="satir">
           <div>
-            <div className="etiket" style={{ fontSize: 12 }}>Harcama limiti</div>
+            <div className="etiket" style={{ fontSize: 12 }}>{t("ana.limit")}</div>
             <div className="disp num" style={{ fontSize: 26 }}>{c ? fmtUsd(limit) : "—"}</div>
           </div>
           <div style={{ textAlign: "right", fontSize: 13 }}>
-            <div className="ikincil">Açık borç</div>
+            <div className="ikincil">{t("ana.acikBorc")}</div>
             <div className="num" style={{ fontWeight: 600 }}>{c ? fmtUsd(debt) : "—"}</div>
           </div>
         </div>
@@ -134,21 +137,21 @@ function Dashboard() {
           <i style={{ width: `${capacity > 0 ? Math.min(100, (debt / capacity) * 100) : 0}%` }} />
         </div>
         <div className="satir" style={{ fontSize: 12.5, marginTop: 8 }} >
-          <span className="ikincil">Sağlık faktörü {hf == null ? "∞" : fmtNum(hf, 2)} · hedef {c?.credit.targetHealth ?? 1.25}</span>
-          <span className="ikincil">Teminat satılmadı</span>
+          <span className="ikincil">{t("ana.saglik", { hf: hf == null ? "∞" : fmtNum(hf, 2), hedef: c?.credit.targetHealth ?? 1.25 })}</span>
+          <span className="ikincil">{t("ana.satilmadi")}</span>
         </div>
       </div>
 
       <div className="blok btn-satir">
-        <Link href="/kazan" className="btn btn-sepya">Kazan&apos;a ekle</Link>
-        <Link href="/nakit" className="btn btn-altin">Nakde çevir</Link>
+        <Link href="/kazan" className="btn btn-sepya">{t("ana.kazanaEkle")}</Link>
+        <Link href="/nakit" className="btn btn-altin">{t("ana.nakdeCevir")}</Link>
       </div>
 
       {live && (
         <div className="blok cam kart">
           <div className="satir">
-            <span className="etiket" style={{ fontSize: 12 }}>Getiri · {c?.poolMode === "blend" ? "Blend" : "HazeCredit"}</span>
-            <span className="zeytin num" style={{ fontWeight: 600 }}>+{fmtUsd(live.valuePerYear / 12)} / ay</span>
+            <span className="etiket" style={{ fontSize: 12 }}>{t("ana.getiri")} · {c?.poolMode === "blend" ? "Blend" : "HazeCredit"}</span>
+            <span className="zeytin num" style={{ fontWeight: 600 }}>+{fmtUsd(live.valuePerYear / 12)} / {t("genel.ay")}</span>
           </div>
           <div style={{ marginTop: 8 }}>
             {live.rows.map((r) => (
@@ -160,7 +163,7 @@ function Dashboard() {
                   </span>
                 </span>
                 <span className="num">
-                  {fmtUsd(r.value)} <span className={r.apy > 0 ? "zeytin" : "ikincil"}>{r.apy > 0 ? fmtPct(r.apy) : "değer koruma"}</span>
+                  {fmtUsd(r.value)} <span className={r.apy > 0 ? "zeytin" : "ikincil"}>{r.apy > 0 ? fmtPct(r.apy) : t("genel.degerKoruma")}</span>
                 </span>
               </div>
             ))}
@@ -169,9 +172,9 @@ function Dashboard() {
       )}
 
       <div className="blok">
-        <div className="satir"><span className="etiket" style={{ fontSize: 12 }}>Son işlemler</span><Link href="/kart" style={{ fontSize: 13 }}>Tümü</Link></div>
+        <div className="satir"><span className="etiket" style={{ fontSize: 12 }}>{t("ana.sonIslemler")}</span><Link href="/kart" style={{ fontSize: 13 }}>{t("ana.tumu")}</Link></div>
         <div className="cam kart" style={{ marginTop: 8, paddingTop: 4, paddingBottom: 4 }}>
-          {txs.length === 0 && <div className="ikincil" style={{ padding: "12px 0", fontSize: 14 }}>Henüz işlem yok.</div>}
+          {txs.length === 0 && <div className="ikincil" style={{ padding: "12px 0", fontSize: 14 }}>{t("ana.islemYok")}</div>}
           {txs.map((t) => (
             <div key={t.key} className="islem">
               <div className="ikon">{t.title.slice(0, 1)}</div>

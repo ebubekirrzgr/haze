@@ -4,7 +4,8 @@
  * Kazan'a eklenen her varlık HazeVault üzerinden Blend'e teminat olarak gider; getiri ve limit aynı pozisyondan.
  */
 import { useEffect, useState } from "react";
-import { ASSET_META, COLLATERAL_CODES, RWA_CODES, assetBlurb, toStroops, type AssetCode, type CollateralCode, type RwaCode } from "@haze/stellar/browser";
+import { ASSET_META, COLLATERAL_CODES, RWA_CODES, toStroops, type AssetCode, type CollateralCode, type RwaCode } from "@haze/stellar/browser";
+import { useLang } from "@/lib/i18n.tsx";
 import { Adimlar, Sahne, Ust, VarlikLogo, Yukleniyor } from "@/components/ui.tsx";
 import { useLiveYield } from "@/components/getiri.tsx";
 import { api } from "@/lib/api.ts";
@@ -17,6 +18,7 @@ const DEFAULT_ALLOC: Record<Code, number> = { USDC: 40, hUSDY: 25, hXAU: 10, hNV
 export default function Kazan() {
   const s = useSession();
   const { ensure } = useChain();
+  const { t, assetName, assetBlurb } = useLang();
   const live = useLiveYield(s.credit, s.prices);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<"ekle" | "dagit" | "cek">("ekle");
@@ -63,7 +65,7 @@ export default function Kazan() {
       setStep(labels.length);
       await s.refresh();
       await loadBalances();
-      s.toast({ title: "Tamamlandı", body: labels[labels.length - 1] });
+      s.toast({ title: t("genel.tamamlandi"), body: labels[labels.length - 1] });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -75,7 +77,7 @@ export default function Kazan() {
   const amt = Number(amount.replace(",", "."));
 
   const ekle = () =>
-    run(["Passkey ile imzala", "vault.deposit (USDC → teminat)"], async (next) => {
+    run([t("genel.passkeyImzala"), t("kazan.adimDeposit")], async (next) => {
       const ch = await ensure();
       next();
       await ch.deposit(vault, "USDC", toStroops(amt.toFixed(7)));
@@ -89,7 +91,7 @@ export default function Kazan() {
   const dagit = () => {
     const active = rwas.filter((c) => alloc[c] > 0);
     return run(
-      ["Passkey ile imzala", ...active.map((c) => `USDC → ${c} (path payment)`), `vault.deposit ×${active.length + 1}`],
+      [t("genel.passkeyImzala"), ...active.map((c) => `USDC → ${c} (path payment)`), `vault.deposit ×${active.length + 1}`],
       async (next) => {
         const ch = await ensure();
         next();
@@ -115,7 +117,7 @@ export default function Kazan() {
   };
 
   const cek = () =>
-    run(["Passkey ile imzala", `vault.withdraw (${withdrawCode} → cüzdan)`], async (next) => {
+    run([t("genel.passkeyImzala"), t("kazan.adimWithdraw", { code: withdrawCode })], async (next) => {
       const ch = await ensure();
       next();
       await ch.withdraw(vault, withdrawCode, toStroops(amt.toFixed(7)));
@@ -136,15 +138,15 @@ export default function Kazan() {
     setAlloc(next);
   };
 
-  if (!s.vault) return <Sahne><Ust title="Kazan" /><div className="cam kart blok">Önce hesap oluştur.</div></Sahne>;
+  if (!s.vault) return <Sahne><Ust title={t("kazan.baslik")} /><div className="cam kart blok">{t("genel.onceHesap")}</div></Sahne>;
 
   return (
     <Sahne>
-      <Ust title="Kazan" />
+      <Ust title={t("kazan.baslik")} />
       <div style={{ paddingTop: 14 }}>
-        <div className="etiket" style={{ fontSize: 12 }}>Teminat · getiri üretiyor</div>
+        <div className="etiket" style={{ fontSize: 12 }}>{t("kazan.teminat")}</div>
         {live ? <div className="disp num" style={{ fontSize: 30 }}>{fmtUsd(live.liveValue)}</div> : <Yukleniyor h={34} w="50%" />}
-        {live && <div className="zeytin num" style={{ fontSize: 13, fontWeight: 600 }}>{fmtPct(live.netApy)} yıllık · {s.prices?.daysPerMinute ? `demo: 1 dk = ${s.prices.daysPerMinute} gün` : ""}</div>}
+        {live && <div className="zeytin num" style={{ fontSize: 13, fontWeight: 600 }}>{fmtPct(live.netApy)} {t("genel.yillik")} · {s.prices?.daysPerMinute ? t("kazan.demoZaman", { n: s.prices.daysPerMinute }) : ""}</div>}
       </div>
 
       <div className="blok cam kart">
@@ -167,35 +169,35 @@ export default function Kazan() {
       </div>
 
       <div className="blok cipler">
-        {(["ekle", "dagit", "cek"] as const).map((t) => (
-          <button key={t} className={`cip${tab === t ? " aktif" : ""}`} onClick={() => setTab(t)}>{{ ekle: "Kazan'a ekle", dagit: "Dağılım", cek: "Çek" }[t]}</button>
+        {(["ekle", "dagit", "cek"] as const).map((tb) => (
+          <button key={tb} className={`cip${tab === tb ? " aktif" : ""}`} onClick={() => setTab(tb)}>{{ ekle: t("kazan.tabEkle"), dagit: t("kazan.tabDagit"), cek: t("kazan.tabCek") }[tb]}</button>
         ))}
       </div>
 
       <div className="blok cam kart">
         {tab === "ekle" && (
           <>
-            <div className="satir"><span className="etiket" style={{ fontSize: 12 }}>Cüzdan USDC</span><span className="num">{fmtNum(balances.USDC ?? 0)}</span></div>
+            <div className="satir"><span className="etiket" style={{ fontSize: 12 }}>{t("kazan.cuzdanUsdc")}</span><span className="num">{fmtNum(balances.USDC ?? 0)}</span></div>
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
             <div className="cipler" style={{ marginTop: 10 }}>
               {[25, 50, 100].map((p) => <button key={p} className="cip" onClick={() => setAmount(((balances.USDC ?? 0) * p / 100).toFixed(2))}>%{p}</button>)}
             </div>
-            <div className="ikincil" style={{ fontSize: 13, marginTop: 10 }}>1 Soroban işlemi: USDC vault&apos;a geçer ve SupplyCollateral ile teminat olur. Ağ ücretini HAZE karşılar.</div>
-            <button className="btn btn-sepya" style={{ marginTop: 12 }} disabled={busy || !(amt > 0) || amt > (balances.USDC ?? 0)} onClick={ekle}>Kazan&apos;a ekle</button>
+            <div className="ikincil" style={{ fontSize: 13, marginTop: 10 }}>{t("kazan.ekleNot")}</div>
+            <button className="btn btn-sepya" style={{ marginTop: 12 }} disabled={busy || !(amt > 0) || amt > (balances.USDC ?? 0)} onClick={ekle}>{t("kazan.ekleBtn")}</button>
           </>
         )}
         {tab === "dagit" && (
           <>
-            <div className="etiket" style={{ fontSize: 12 }}>Cüzdandaki USDC&apos;yi dağıt</div>
+            <div className="etiket" style={{ fontSize: 12 }}>{t("kazan.dagitBaslik")}</div>
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="USDC" value={amount} onChange={(e) => setAmount(e.target.value)} />
             {codes.map((k) => (
               <div key={k} style={{ marginTop: 12 }}>
-                <div className="satir" style={{ fontSize: 14 }}><span className="vlogo-satir"><VarlikLogo code={k} size={22} />{k} <span className="ikincil">{ASSET_META[k].name}</span></span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
+                <div className="satir" style={{ fontSize: 14 }}><span className="vlogo-satir"><VarlikLogo code={k} size={22} />{k} <span className="ikincil">{assetName(k)}</span></span><span className="num">%{alloc[k]} · {fmtUsd((amt || 0) * alloc[k] / 100)}</span></div>
                 <input type="range" min={0} max={100} value={alloc[k]} onChange={(e) => setAllocKey(k, Number(e.target.value))} />
               </div>
             ))}
-            <div className="ikincil" style={{ fontSize: 13, marginTop: 6 }}>Tek passkey onayı: payı olan her RWA için bir PathPaymentStrictReceive (DEX/AMM) + deposit; sponsor hepsine fee-bump uygular.</div>
-            <button className="btn btn-sepya" style={{ marginTop: 12 }} disabled={busy || !(amt > 0) || amt > (balances.USDC ?? 0)} onClick={dagit}>Dağılımı uygula</button>
+            <div className="ikincil" style={{ fontSize: 13, marginTop: 6 }}>{t("kazan.dagitNot")}</div>
+            <button className="btn btn-sepya" style={{ marginTop: 12 }} disabled={busy || !(amt > 0) || amt > (balances.USDC ?? 0)} onClick={dagit}>{t("kazan.dagitBtn")}</button>
           </>
         )}
         {tab === "cek" && (
@@ -204,8 +206,8 @@ export default function Kazan() {
               {codes.map((k) => <button key={k} className={`cip${withdrawCode === k ? " aktif" : ""}`} onClick={() => setWithdrawCode(k)}>{k}</button>)}
             </div>
             <input className="girdi girdi-buyuk num" style={{ marginTop: 10 }} inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <div className="ikincil" style={{ fontSize: 13, marginTop: 10 }}>WithdrawCollateral → cüzdanına gelir. Havuz, sağlık faktörü bozulursa işlemi reddeder.</div>
-            <button className="btn btn-altin" style={{ marginTop: 12 }} disabled={busy || !(amt > 0)} onClick={cek}>Kazan&apos;dan çek</button>
+            <div className="ikincil" style={{ fontSize: 13, marginTop: 10 }}>{t("kazan.cekNot")}</div>
+            <button className="btn btn-altin" style={{ marginTop: 12 }} disabled={busy || !(amt > 0)} onClick={cek}>{t("kazan.cekBtn")}</button>
           </>
         )}
       </div>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useSession } from "@/lib/session.tsx";
+import { useLang } from "@/lib/i18n.tsx";
 
 /** Zemin lekeleri (kit §4) */
 export function Atmos({ koyu = false }: { koyu?: boolean }) {
@@ -26,7 +27,8 @@ export function Atmos({ koyu = false }: { koyu?: boolean }) {
 }
 
 export function DemoRozet() {
-  return <span className="demo-rozet">DEMO MODU</span>;
+  const { t } = useLang();
+  return <span className="demo-rozet">{t("genel.demo")}</span>;
 }
 
 /** Yükselen H logo — kitteki geometriyle (logo/haze-logo-*.svg). animate: çizgi bir kez çizilir. */
@@ -61,14 +63,15 @@ export function Ikon({ size = 28 }: { size?: number }) {
 }
 
 const NAV = [
-  { href: "/", label: "Ana sayfa", d: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { href: "/kazan", label: "Kazan", d: "M4 18c4-1 6-6 8-9s5-4 8-4M4 18h16" },
-  { href: "/kart", label: "Kart", d: "M3 7h18v10H3zM3 11h18" },
-  { href: "/profil", label: "Profil", d: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9a8 8 0 0 1 16 0" },
+  { href: "/", label: "nav.ana" as const, d: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
+  { href: "/kazan", label: "nav.kazan" as const, d: "M4 18c4-1 6-6 8-9s5-4 8-4M4 18h16" },
+  { href: "/kart", label: "nav.kart" as const, d: "M3 7h18v10H3zM3 11h18" },
+  { href: "/profil", label: "nav.profil" as const, d: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9a8 8 0 0 1 16 0" },
 ];
 
 export function AltNav() {
   const p = usePathname();
+  const { t } = useLang();
   return (
     <nav className="alt-nav">
       {NAV.map((n) => (
@@ -76,7 +79,7 @@ export function AltNav() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
             <path d={n.d} />
           </svg>
-          {n.label}
+          {t(n.label)}
         </Link>
       ))}
     </nav>
@@ -95,12 +98,13 @@ export function Sahne({ children, koyu = false, nav = true }: { children: ReactN
 }
 
 export function Ust({ title, back }: { title?: string; back?: string }) {
+  const { t } = useLang();
   return (
     <div className="ust">
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {back ? (
           <Link href={back} className="btn-metin" style={{ padding: 0, height: "auto" }}>
-            ← Geri
+            {t("genel.geri")}
           </Link>
         ) : (
           <Ikon />

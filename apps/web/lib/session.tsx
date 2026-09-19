@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Keypair } from "@stellar/stellar-sdk";
 import { api, type ApiConfig, type CreditView, type Notification, type Prices } from "./api.ts";
 import { Chain } from "./chain.ts";
+import { useLang } from "./i18n.tsx";
 import { clearWallet, loadWallet, registerPasskey, saveWallet, unlockWithPasskey, type StoredWallet } from "./passkey.ts";
 
 export interface Toast {
@@ -49,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [holds, setHolds] = useState<import("./api.ts").Hold[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const { notif } = useLang();
   const lastNote = useRef(0);
   const toastId = useRef(0);
 
@@ -110,7 +112,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (stop) return;
         if (ns.length) {
           if (lastNote.current > 0) {
-            for (const n of ns.slice().reverse()) toast({ title: n.title, body: n.body, kind: n.kind.includes("declined") || n.kind.includes("failed") ? "warn" : "ok" });
+            for (const n of ns.slice().reverse()) toast({ ...notif(n), kind: n.kind.includes("declined") || n.kind.includes("failed") ? "warn" : "ok" });
             void refresh();
           }
           lastNote.current = Math.max(lastNote.current, ...ns.map((n) => n.id));
@@ -126,13 +128,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       stop = true;
       clearInterval(t);
     };
-  }, [pub, toast, refresh]);
+  }, [pub, toast, refresh, notif]);
 
   const finishSetup = useCallback(
     async (kp: Keypair, onStep?: (s: string) => void) => {
       if (!config) throw new Error("API yapılandırması yok");
       const { vault: v } = await Chain.onboard(config, kp, onStep);
-      onStep?.("Passkey kaydı");
+      onStep?.("adim.passkey");
       const w = (await registerPasskey(kp.publicKey(), kp.secret())) ?? { publicKey: kp.publicKey(), mode: "plain" as const, plainSecret: kp.secret(), createdAt: Date.now() };
       w.vaultAddress = v;
       saveWallet(w);
@@ -149,7 +151,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (secret: string, onStep?: (s: string) => void) => {
       if (!config) throw new Error("API yapılandırması yok");
       const kp = Keypair.fromSecret(secret.trim());
-      onStep?.("Hesap kontrol ediliyor");
+      onStep?.("adim.hesapKontrol");
       let v: string | null = null;
       try {
         v = (await api.user(kp.publicKey())).vaultAddress;

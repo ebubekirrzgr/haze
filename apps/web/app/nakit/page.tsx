@@ -11,13 +11,15 @@ import { Adimlar, Sahne, Ust } from "@/components/ui.tsx";
 import { api } from "@/lib/api.ts";
 import { useChain, useSession } from "@/lib/session.tsx";
 import { fmtNum, fmtTry, fmtUsd } from "@/lib/format.ts";
+import { useLang } from "@/lib/i18n.tsx";
 
 type Source = RwaCode | "borrow";
-const SOURCE_LABEL: Record<RwaCode, string> = { hXAU: "Altından (hXAU)", hUSDY: "Bonodan (hUSDY)", hNVDA: "NVIDIA'dan (hNVDA)", hSHEL: "Shell'den (hSHEL)", hBMW: "BMW'den (hBMW)" };
+const SOURCE_LABEL_TR: Record<RwaCode, string> = { hXAU: "Altından (hXAU)", hUSDY: "Bonodan (hUSDY)", hNVDA: "NVIDIA'dan (hNVDA)", hSHEL: "Shell'den (hSHEL)", hBMW: "BMW'den (hBMW)" };
 
 export default function Nakit() {
   const s = useSession();
   const { ensure } = useChain();
+  const { t, lang, assetName } = useLang();
   const [amountTry, setAmountTry] = useState("500");
   const [source, setSource] = useState<Source>("hXAU");
   const [steps, setSteps] = useState<string[]>([]);
@@ -40,7 +42,7 @@ export default function Nakit() {
     setError(undefined);
     setResult([]);
     const parts = splitTry(amt);
-    const labels = ["Passkey ile imzala", ...parts.flatMap((p, i) => [`${i + 1}. ${source === "borrow" ? "vault.borrow" : `vault.withdraw ${source}`} (${fmtTry(p)})`, `${i + 1}. SEP-38 teklif + SEP-6 withdraw`, `${i + 1}. ${source === "borrow" ? "USDC ödemesi" : "PathPaymentStrictReceive → USDC"} (memo)`, `${i + 1}. Anchor TL gönderdi`])];
+    const labels = [t("genel.passkeyImzala"), ...parts.flatMap((p, i) => [`${i + 1}. ${source === "borrow" ? "vault.borrow" : `vault.withdraw ${source}`} (${fmtTry(p)})`, `${i + 1}. ${t("nakit.adimTeklif")}`, `${i + 1}. ${source === "borrow" ? t("nakit.adimOdeme") : "PathPaymentStrictReceive → USDC"} (memo)`, `${i + 1}. ${t("nakit.adimAnchor")}`])];
     setSteps(labels);
     setStep(0);
     let cur = 0;
@@ -76,7 +78,7 @@ export default function Nakit() {
         setResult((x) => [...x, { tryOut: Number(instr.tryAmount), usdc: Number(instr.usdcAmount), status: st }]);
       }
       await s.refresh();
-      s.toast({ title: "Nakde çevrildi", body: `${fmtTry(amt)} → kayıtlı IBAN (simüle)` });
+      s.toast({ title: t("nakit.cevrildi"), body: t("nakit.ibanSimule", { tutar: fmtTry(amt) }) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -86,42 +88,42 @@ export default function Nakit() {
 
   return (
     <Sahne>
-      <Ust title="Nakde çevir" back="/" />
+      <Ust title={t("nakit.baslik")} back="/" />
       <div style={{ paddingTop: 14 }}>
-        <div className="disp" style={{ fontSize: 22, lineHeight: 1.3 }}>TL&apos;ye, satmadan ya da satarak.</div>
-        <div className="ikincil" style={{ fontSize: 14, marginTop: 4 }}>Tek ekran: tutar, kaynak, kayıtlı IBAN. Anchor işlem limiti aşılırsa tutar parçalanır.</div>
+        <div className="disp" style={{ fontSize: 22, lineHeight: 1.3 }}>{t("nakit.slogan")}</div>
+        <div className="ikincil" style={{ fontSize: 14, marginTop: 4 }}>{t("nakit.aciklama")}</div>
       </div>
 
       <div className="blok cam kart">
-        <div className="etiket" style={{ fontSize: 12 }}>Tutar</div>
+        <div className="etiket" style={{ fontSize: 12 }}>{t("nakit.tutar")}</div>
         <input className="girdi girdi-buyuk num" style={{ marginTop: 8 }} inputMode="decimal" value={amountTry} onChange={(e) => setAmountTry(e.target.value)} />
         <div className="cipler" style={{ marginTop: 10 }}>
           {[500, 1000, 2000].map((v) => <button key={v} className={`cip${amt === v ? " aktif" : ""}`} onClick={() => setAmountTry(String(v))}>{fmtTry(v)}</button>)}
         </div>
-        <div className="satir" style={{ marginTop: 12, fontSize: 14 }}><span className="ikincil">Kur (SEP-38)</span><span className="num">{usdTry ? `1 USDC = ${fmtTry(usdTry, 2)}` : "…"}</span></div>
-        <div className="satir" style={{ fontSize: 14 }}><span className="ikincil">Gerekli USDC</span><span className="num">≈ {fmtUsd(estUsdc)}</span></div>
+        <div className="satir" style={{ marginTop: 12, fontSize: 14 }}><span className="ikincil">{t("nakit.kur")}</span><span className="num">{usdTry ? `1 USDC = ${fmtTry(usdTry, 2)}` : "…"}</span></div>
+        <div className="satir" style={{ fontSize: 14 }}><span className="ikincil">{t("nakit.gerekliUsdc")}</span><span className="num">≈ {fmtUsd(estUsdc)}</span></div>
       </div>
 
       <div className="blok cam kart">
-        <div className="etiket" style={{ fontSize: 12 }}>Kaynak</div>
+        <div className="etiket" style={{ fontSize: 12 }}>{t("nakit.kaynak")}</div>
         <div className="cipler" style={{ marginTop: 8 }}>
           {sources.map((k) => (
-            <button key={k} className={`cip${source === k ? " aktif" : ""}`} onClick={() => setSource(k)}>{k === "borrow" ? "Satmadan · borçla" : SOURCE_LABEL[k]}</button>
+            <button key={k} className={`cip${source === k ? " aktif" : ""}`} onClick={() => setSource(k)}>{k === "borrow" ? t("nakit.borcla") : lang === "tr" ? SOURCE_LABEL_TR[k] : t("nakit.kaynakEtiket", { ad: assetName(k), code: k })}</button>
           ))}
         </div>
         {source === "borrow" ? (
           <div className="ikincil" style={{ fontSize: 13.5, marginTop: 10 }}>
-            Teminata dokunulmaz; vault USDC borç açar ve hesabına gönderir. Kullanılabilir limit <b className="num" style={{ color: "var(--sepya)" }}>{fmtUsd(limit)}</b>.
+            {t("nakit.borcNot")} <b className="num" style={{ color: "var(--sepya)" }}>{fmtUsd(limit)}</b>.
           </div>
         ) : (
           <div className="ikincil" style={{ fontSize: 13.5, marginTop: 10 }}>
-            Teminatta <b className="num" style={{ color: "var(--sepya)" }}>{fmtNum(collateral?.collateralFloat ?? 0, ASSET_META[source].displayDecimals)} {source}</b>. Gerekli: ≈ {fmtNum(price ? estUsdc / price : 0, 4)} {source}. Aynı {source} tokenı DEX&apos;te tek atomik işlemle tam USDC&apos;ye dönüşür; anchor TL gönderir.
+            {t("nakit.teminatta")} <b className="num" style={{ color: "var(--sepya)" }}>{fmtNum(collateral?.collateralFloat ?? 0, ASSET_META[source].displayDecimals)} {source}</b>. {t("nakit.gerekli")}: ≈ {fmtNum(price ? estUsdc / price : 0, 4)} {source}. {t("nakit.dexNot", { code: source })}
           </div>
         )}
-        <div className="satir" style={{ fontSize: 14, marginTop: 10 }}><span className="ikincil">Hedef</span><span>Kayıtlı IBAN · TR•• •••• 4821 (simüle)</span></div>
+        <div className="satir" style={{ fontSize: 14, marginTop: 10 }}><span className="ikincil">{t("nakit.hedef")}</span><span>{t("nakit.iban")}</span></div>
       </div>
 
-      <button className="btn btn-altin blok" disabled={busy || !(amt >= 50) || !s.vault || (source === "borrow" && estUsdc > limit)} onClick={run}>{fmtTry(amt || 0)} çek</button>
+      <button className="btn btn-altin blok" disabled={busy || !(amt >= 50) || !s.vault || (source === "borrow" && estUsdc > limit)} onClick={run}>{t("nakit.cekBtn", { tutar: fmtTry(amt || 0) })}</button>
       {steps.length > 0 && <Adimlar steps={steps} current={step} error={error} />}
       {result.length > 0 && (
         <div className="cam kart" style={{ marginTop: 12 }}>

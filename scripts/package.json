@@ -11,6 +11,7 @@
     "haze:deploy": "bash haze/deploy.sh",
     "blend:deploy": "bash blend/deploy.sh",
     "demo-user": "node --experimental-transform-types seed/demo-user.ts",
+    "pool:supply": "node --experimental-transform-types haze/supply.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

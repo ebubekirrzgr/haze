@@ -47,10 +47,29 @@ impl MockOracle {
 
     /// Fiyat yaz (admin). price 7 ondalıklı.
     pub fn set_price(env: Env, asset: Asset, price: i128) {
+        Self::require_admin(&env);
+        Self::bump(&env);
+        Self::write_price(&env, asset, price);
+    }
+
+    /// Toplu fiyat yazımı (fiyat botu tek işlemle günceller). Yetki bir kez alınır;
+    /// döngü içinde tekrar `require_auth` çağrılsaydı aynı çerçevede "frame already authorized" hatası oluşurdu.
+    pub fn set_prices(env: Env, assets: Vec<Asset>, prices: Vec<i128>) {
+        assert!(assets.len() == prices.len(), "length mismatch");
+        Self::require_admin(&env);
+        Self::bump(&env);
+        for i in 0..assets.len() {
+            Self::write_price(&env, assets.get(i).unwrap(), prices.get(i).unwrap());
+        }
+    }
+
+    fn require_admin(env: &Env) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
+    }
+
+    fn write_price(env: &Env, asset: Asset, price: i128) {
         assert!(price > 0, "price must be positive");
-        Self::bump(&env);
         let data = PriceData {
             price,
             timestamp: env.ledger().timestamp(),
@@ -62,14 +81,6 @@ impl MockOracle {
         if !assets.contains(&asset) {
             assets.push_back(asset);
             env.storage().instance().set(&DataKey::Assets, &assets);
-        }
-    }
-
-    /// Toplu fiyat yazımı (fiyat botu tek işlemle günceller).
-    pub fn set_prices(env: Env, assets: Vec<Asset>, prices: Vec<i128>) {
-        assert!(assets.len() == prices.len(), "length mismatch");
-        for i in 0..assets.len() {
-            Self::set_price(env.clone(), assets.get(i).unwrap(), prices.get(i).unwrap());
         }
     }
 

@@ -18,7 +18,7 @@ import {
   feeBump,
   toStroops,
 } from "@haze/stellar";
-import { keyFromEnv, readConfig, submitClassic } from "../lib/common.ts";
+import { ensureTrustline, keyFromEnv, readConfig, submitClassic } from "../lib/common.ts";
 
 const [usdcArg = "500", husdyArg = "300", hxauArg = "0.1"] = process.argv.slice(2);
 const API = process.env.API_URL ?? "http://localhost:8787";
@@ -45,7 +45,9 @@ if (!exists) {
   const r = await soroban.sendAndWait(tx);
   console.log(`✓ sponsorlu hesap açıldı ${r.hash.slice(0, 8)}…`);
 } else {
+  // keys.ts demo hesabını friendbot ile fonlar; sponsorlu açılış atlanınca trustline'lar burada açılır.
   console.log("  hesap zaten var");
+  for (const a of assets) await ensureTrustline(cfg, user, a);
 }
 
 // 2) vault

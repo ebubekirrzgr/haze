@@ -83,7 +83,8 @@ export class PriceService {
     try {
       await this.marketMake(prices);
     } catch (e) {
-      this.d.log?.(`market maker failed: ${e instanceof Error ? e.message : e}`);
+      const codes = (e as { response?: { data?: { extras?: { result_codes?: unknown } } } })?.response?.data?.extras?.result_codes;
+      this.d.log?.(`market maker failed: ${e instanceof Error ? e.message : e}${codes ? " " + JSON.stringify(codes) : ""}`);
     }
     if (Date.now() - this.fxAt > 5 * 60_000) await this.refreshFx();
   }
@@ -106,20 +107,32 @@ export class PriceService {
       { code: "hXAU", priceUsd: Number(prices[cfg.assets.hXAU.sac]) / 1e7, size: "2" },
       { code: "hTRY", priceUsd: this.usdTry ? 1 / (Number(this.usdTry) / 1e7) : 0, size: "100000" },
     ];
+    // Alış (USDC satan) emirleri hazinenin USDC bakiyesine sığdırılır: bakiyenin MM_USDC_SHARE kadarı
+    // (varsayılan %25) teklif defterine ayrılır, kalanı demo kullanıcı / havuz likiditesi için serbest kalır.
+    // Aksi halde toplam emir bakiyeyi aşar ve Horizon işlemi op_underfunded ile reddeder.
+    const usdcBalance = Number(
+      account.balances.find((bal) => "asset_code" in bal && bal.asset_code === usdc.code && bal.asset_issuer === usdc.issuer)?.balance ?? 0,
+    );
+    const share = Number(process.env.MM_USDC_SHARE ?? 0.25);
+    const active = pairs.filter((p) => p.priceUsd && cfg.assets[p.code].issuer);
+    const wantedUsdc = active.reduce((sum, p) => sum + Number(p.size) * p.priceUsd, 0);
+    const scale = wantedUsdc > 0 ? Math.min(1, (usdcBalance * share) / wantedUsdc) : 0;
     let ops = 0;
-    for (const p of pairs) {
-      if (!p.priceUsd || !cfg.assets[p.code].issuer) continue;
+    for (const p of active) {
       const asset = new Asset(cfg.assets[p.code].code, cfg.assets[p.code].issuer);
+      const size = Number(p.size) * scale;
+      const bidUsdc = size * p.priceUsd;
+      if (size < 0.0000001 || bidUsdc < 0.0000001) continue;
       const ask = (p.priceUsd * 1.003).toFixed(7); // sat: 1 asset = ask USDC
       const bidPrice = (1 / (p.priceUsd * 0.997)).toFixed(7); // sat USDC al asset: 1 USDC = ... asset
       const askOffer = existing.records.find((o) => o.selling.asset_code === p.code && o.buying.asset_code === "USDC");
       const bidOffer = existing.records.find((o) => o.selling.asset_code === "USDC" && o.buying.asset_code === p.code);
-      b.addOperation(Operation.manageSellOffer({ selling: asset, buying: usdc, amount: p.size, price: ask, offerId: askOffer?.id ?? "0" }));
+      b.addOperation(Operation.manageSellOffer({ selling: asset, buying: usdc, amount: size.toFixed(7), price: ask, offerId: askOffer?.id ?? "0" }));
       b.addOperation(
         Operation.manageSellOffer({
           selling: usdc,
           buying: asset,
-          amount: (Number(p.size) * p.priceUsd).toFixed(7),
+          amount: bidUsdc.toFixed(7),
           price: bidPrice,
           offerId: bidOffer?.id ?? "0",
         }),

@@ -31,10 +31,11 @@ pnpm dev:terminal                                    # http://localhost:3001 →
 | # | Komut | Ne yapar | Kontrol |
 |---|---|---|---|
 | 1 | `pnpm --filter @haze/scripts keys` | 8 anahtar üretir, friendbot'la fonlar, `.env` + `testnet.contracts.json` yazar | `.env` içinde `*_SECRET` dolu |
-| 2 | Treasury'ye USDC: `pnpm --filter @haze/scripts fund-usdc -- TREASURY_SECRET 8` (≈ 8×70 USDC) ya da faucet.circle.com | Blend likiditesi + AMM + demo kullanıcı için USDC | Horizon'da treasury USDC bakiyesi |
+| 2 | Treasury'ye USDC: `pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8` (≈ 8×60 USDC; pnpm 10'da `--` kullanma, script'e argüman olarak geçer; paralel 3 oturum ≈ 1.500 USDC) ya da faucet.circle.com | Blend likiditesi + AMM + demo kullanıcı için USDC | Horizon'da treasury USDC bakiyesi |
 | 3 | `pnpm --filter @haze/scripts assets` | hUSDY/hXAU/hTRY ihracı → treasury, 4 SAC deploy | `testnet.contracts.json` → `assets.*.sac` dolu |
-| 4 | `pnpm --filter @haze/scripts haze:deploy` | wasm build → haze_vault upload, MockOracle, HazeCredit (rezervler + fiyat), VaultFactory | `haze.vaultFactory` dolu; `blend.mode = hazecredit` |
+| 4 | `pnpm --filter @haze/scripts haze:deploy` | `stellar contract build` (soroban-sdk 28 `cargo build`'i reddeder) → haze_vault upload, MockOracle, HazeCredit (rezervler + fiyat), VaultFactory | `haze.vaultFactory` dolu; `blend.mode = hazecredit` |
 | 5 | `pnpm --filter @haze/scripts amm` | USDC/hUSDY, USDC/hXAU, USDC/hTRY klasik AMM havuzları | `stellar.expert`'te liquidity pool |
+| 5b | `pnpm --filter @haze/scripts pool:supply 200` | Hazineden HazeCredit'e USDC likiditesi (kart borçları havuz bakiyesinden aktarılır; kullanıcı teminatı da havuzdadır) | `GET /credit/<G>` sonrası borç işlemleri geçiyor |
 | 6 | `pnpm dev:api` (ayrı terminal) | haze-api: fiyat botu oracle'ı + teklif defterini günceller | `GET /health`, `GET /prices` USDTRY dolu |
 | 7 | `pnpm --filter @haze/scripts demo-user` | Demo kullanıcı: sponsorlu hesap, vault, 500 USDC + 300 hUSDY + 0,1 hXAU teminat, allowance, kart, anchor JWT | `GET /credit/<G>` limit gösteriyor |
 | 8 | `pnpm dev:web`, `pnpm dev:terminal` | PWA + POS | terminal → ONAYLANDI, explorer'da `borrow_for_card` |

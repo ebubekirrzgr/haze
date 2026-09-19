@@ -13,3 +13,7 @@ dist/
 test_snapshots/
 *.db-shm
 *.db-wal
+.DS_Store
+*.tsbuildinfo
+packages/bindings/
+.blend-utils/

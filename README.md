@@ -227,10 +227,11 @@ The full sequence, with checks at each step, is in [RUNBOOK.md](RUNBOOK.md). In 
 
 ```bash
 pnpm --filter @haze/scripts keys          # generate and fund 8 keypairs, write .env and testnet.contracts.json
-pnpm --filter @haze/scripts fund-usdc     # USDC for treasury (or faucet.circle.com)
+pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8   # ~60 USDC per round from the mock anchor; run several in parallel for more
 pnpm --filter @haze/scripts assets        # issue hUSDY / hXAU / hTRY, deploy 4 SACs
 pnpm --filter @haze/scripts haze:deploy   # build wasm, deploy MockOracle, HazeCredit, VaultFactory
 pnpm --filter @haze/scripts amm           # seed USDC/hUSDY, USDC/hXAU, USDC/hTRY liquidity pools
+pnpm --filter @haze/scripts pool:supply 200   # treasury supplies USDC liquidity to HazeCredit (borrows are paid from the pool balance)
 pnpm dev:api                              # price bot starts updating oracle + order book
 pnpm --filter @haze/scripts demo-user     # sponsored account, vault, collateral, allowance, card, anchor JWT
 pnpm dev:web && pnpm dev:terminal

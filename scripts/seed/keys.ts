@@ -5,8 +5,8 @@
  *
  *   pnpm --filter @haze/scripts keys
  */
-import { Keypair } from "@stellar/stellar-sdk";
-import { API_ENV_PATH, friendbot, readConfig, readEnvFile, writeConfig, writeEnvFile } from "../lib/common.ts";
+import { Asset, Keypair } from "@stellar/stellar-sdk";
+import { API_ENV_PATH, ensureTrustline, friendbot, readConfig, readEnvFile, writeConfig, writeEnvFile } from "../lib/common.ts";
 
 const NAMES = ["SPONSOR", "OPERATOR", "ISSUER", "TREASURY", "SETTLEMENT", "ORACLE_ADMIN", "DEMO_USER", "BLEND_ADMIN"] as const;
 
@@ -27,6 +27,13 @@ writeEnvFile(
 );
 
 const cfg = readConfig();
+
+// USDC alan servis hesapları: settlement (kart borçları buraya aktarılır) ve treasury (fund-usdc / AMM / demo).
+// Trustline yoksa vault.borrow_for_card "trustline entry is missing" ile düşer.
+console.log("\nUSDC trustline…");
+const usdc = new Asset(cfg.assets.USDC.code, cfg.assets.USDC.issuer);
+for (const n of ["SETTLEMENT", "TREASURY"] as const) await ensureTrustline(cfg, keys[n]!, usdc);
+
 cfg.accounts.sponsor = keys.SPONSOR!.publicKey();
 cfg.accounts.operator = keys.OPERATOR!.publicKey();
 cfg.accounts.issuer = keys.ISSUER!.publicKey();

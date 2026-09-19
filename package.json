@@ -9,7 +9,7 @@
     "dev:terminal": "pnpm --filter @haze/terminal dev",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "contracts:build": "cargo build --target wasm32v1-none --release -p haze-vault -p vault-factory -p haze-credit -p mock-oracle",
+    "contracts:build": "stellar contract build",
     "contracts:test": "cargo test"
   }
 }

@@ -227,10 +227,11 @@ Her adımda kontrol noktası içeren tam sıra [RUNBOOK.md](RUNBOOK.md) dosyası
 
 ```bash
 pnpm --filter @haze/scripts keys          # 8 anahtar üretir ve fonlar, .env ile testnet.contracts.json yazar
-pnpm --filter @haze/scripts fund-usdc     # hazineye USDC (ya da faucet.circle.com)
+pnpm --filter @haze/scripts fund-usdc TREASURY_SECRET 8   # mock anchor'dan tur başına ~60 USDC; daha fazlası için paralel koşun
 pnpm --filter @haze/scripts assets        # hUSDY / hXAU / hTRY ihracı, 4 SAC dağıtımı
 pnpm --filter @haze/scripts haze:deploy   # wasm build, MockOracle, HazeCredit, VaultFactory dağıtımı
 pnpm --filter @haze/scripts amm           # USDC/hUSDY, USDC/hXAU, USDC/hTRY likidite havuzları
+pnpm --filter @haze/scripts pool:supply 200   # hazineden HazeCredit'e USDC likiditesi (borçlar havuz bakiyesinden ödenir)
 pnpm dev:api                              # fiyat botu oracle'ı ve teklif defterini güncellemeye başlar
 pnpm --filter @haze/scripts demo-user     # sponsorlu hesap, kasa, teminat, allowance, kart, anchor JWT
 pnpm dev:web && pnpm dev:terminal

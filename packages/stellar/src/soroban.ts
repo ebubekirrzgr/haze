@@ -7,6 +7,7 @@ import {
   BASE_FEE,
   Contract,
   Keypair,
+  SorobanDataBuilder,
   Transaction,
   TransactionBuilder,
   nativeToScVal,
@@ -28,10 +29,39 @@ export const sc = {
 };
 
 export interface InvokeOptions {
+  /** dahil etme ücreti (stroops, işlem başına). Varsayılan 100_000 = 0,01 XLM; testnet surge fiyatlamasında 10_000 yetmiyor. */
   fee?: string;
   timeoutSec?: number;
-  /** simülasyondaki kaynak ücretini bu oranda şişir (yavaş testnet için) */
+  /** simülasyondaki kaynak ücretini bu oranda şişir; fazlası (iade edilebilir kısım) geri döner. Varsayılan 2. */
   resourceFeeMultiplier?: number;
+  /** simülasyondaki talimat / okuma / yazma kaynaklarını bu oranda şişir. Varsayılan 1.3. */
+  resourceMargin?: number;
+}
+
+/** Dahil etme ücreti varsayılanı (stroops / işlem). */
+export const INCLUSION_FEE = (Number(BASE_FEE) * 1000).toString();
+/** Soroban işlem başına talimat üst sınırı (ağ limiti). */
+const MAX_INSTRUCTIONS = 100_000_000;
+
+/**
+ * Simülasyon kaynaklarına pay ekler. Simülasyon ile yürütme arasında durum değişirse (fiyat botu,
+ * faiz tahakkuku, başka bir işlem) yazılan bayt ya da talimat sayısı büyüyebilir; pay yoksa işlem
+ * `resource_limit_exceeded` ile düşer ("byte-write resources exceeds amount specified").
+ */
+export function padResources(
+  tx: Transaction,
+  sim: rpc.Api.SimulateTransactionSuccessResponse,
+  opts: { inclusionFee: string; margin: number; feeMultiplier: number },
+): Transaction {
+  const data = sim.transactionData.build();
+  const res = data.resources;
+  const instructions = Math.min(MAX_INSTRUCTIONS, Math.ceil(res.instructions * opts.margin));
+  const diskReadBytes = Math.ceil(res.diskReadBytes * opts.margin);
+  const writeBytes = Math.ceil(res.writeBytes * opts.margin);
+  const resourceFee = BigInt(Math.ceil(Number(sim.minResourceFee) * opts.feeMultiplier));
+  const sorobanData = new SorobanDataBuilder(data).setResources(instructions, diskReadBytes, writeBytes).setResourceFee(resourceFee).build();
+  const fee = (BigInt(opts.inclusionFee) + resourceFee).toString();
+  return TransactionBuilder.cloneFrom(tx, { fee, sorobanData, networkPassphrase: tx.networkPassphrase }).build();
 }
 
 export class SorobanClient {
@@ -56,8 +86,9 @@ export class SorobanClient {
   ): Promise<{ tx: Transaction; sim: rpc.Api.SimulateTransactionSuccessResponse }> {
     const account = await this.server.getAccount(source);
     const contract = new Contract(contractId);
+    const inclusionFee = opts.fee ?? INCLUSION_FEE;
     const tx = new TransactionBuilder(account, {
-      fee: opts.fee ?? (Number(BASE_FEE) * 100).toString(),
+      fee: inclusionFee,
       networkPassphrase: this.passphrase,
     })
       .addOperation(contract.call(method, ...args))
@@ -71,7 +102,12 @@ export class SorobanClient {
       throw new SimulationError(`${method} needs state restore (TTL expired)`, sim);
     }
     const assembled = rpc.assembleTransaction(tx, sim).build();
-    return { tx: assembled, sim };
+    const padded = padResources(assembled, sim, {
+      inclusionFee,
+      margin: opts.resourceMargin ?? 1.3,
+      feeMultiplier: opts.resourceFeeMultiplier ?? 2,
+    });
+    return { tx: padded, sim };
   }
 
   /** Salt okunur çağrı: simüle eder, sonucu native değere çevirir. `source` var olan herhangi bir hesap. */

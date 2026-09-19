@@ -26,11 +26,11 @@ const src = (k: { secret(): string }) => ["--source-account", k.secret()];
 
 const wasmDir = resolve(ROOT, "target/wasm32v1-none/release");
 if (!skipBuild) {
-  console.log("cargo build (wasm)…");
-  execFileSync("cargo", ["build", "--target", "wasm32v1-none", "--release", "-p", "haze-vault", "-p", "vault-factory", "-p", "haze-credit", "-p", "mock-oracle"], { cwd: ROOT, stdio: "inherit" });
+  console.log("stellar contract build (wasm)…");
+  execFileSync("stellar", ["contract", "build"], { cwd: ROOT, stdio: "inherit" });
 }
 for (const f of ["haze_vault", "vault_factory", "haze_credit", "mock_oracle"]) {
-  if (!existsSync(resolve(wasmDir, `${f}.wasm`))) throw new Error(`${f}.wasm yok — rustup target add wasm32v1-none && cargo build`);
+  if (!existsSync(resolve(wasmDir, `${f}.wasm`))) throw new Error(`${f}.wasm yok — rustup target add wasm32v1-none && stellar contract build`);
 }
 
 // 1) haze_vault wasm upload

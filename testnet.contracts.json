@@ -7,22 +7,38 @@
   "anchorTreasury": "GCLCZEQZ2THTEDAOFI66LACNPLY4OBKN7VKLEZFMBIHYKYQOW2W7T3Z6",
   "anchorUsdcIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
   "accounts": {
-    "sponsor": "",
-    "operator": "",
-    "issuer": "",
-    "distributor": "",
-    "treasury": "",
-    "settlement": "",
-    "oracleAdmin": ""
+    "sponsor": "GBV7JB2GKDTXWYJDFPL23XRFMLURGY62JJSEQITPARUKKMKIQ4ESOFYS",
+    "operator": "GCIZ7OH2MJGAUVXXVFB4EQM3DLZW5O4BLE2B7XSBNX366CMYXCSDJB4X",
+    "issuer": "GBLCVSKD2YJQARRSNXHMAX7EYLFSSQMQEDU6GOWAXH7X4LBVB62QN4A4",
+    "distributor": "GAVZAHSIQUODEQVOVBVNKZ2MGBXFEKPA7VTDOYMC6RZSL6XCABHHRTFM",
+    "treasury": "GAVZAHSIQUODEQVOVBVNKZ2MGBXFEKPA7VTDOYMC6RZSL6XCABHHRTFM",
+    "settlement": "GBONI2WIN6E4LLHXQOFR6GTWX6GZCZ6ULNRDUT7M46TZOJIYJWYM5JKX",
+    "oracleAdmin": "GD7RLICMERXST3GIL7GXFPLDGBDCCWTV5EYVSULLBFMOVSRT3IVIHONP"
   },
   "assets": {
-    "USDC": { "code": "USDC", "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "sac": "" },
-    "hUSDY": { "code": "hUSDY", "issuer": "", "sac": "" },
-    "hXAU": { "code": "hXAU", "issuer": "", "sac": "" },
-    "hTRY": { "code": "hTRY", "issuer": "", "sac": "" }
+    "USDC": {
+      "code": "USDC",
+      "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "sac": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+    },
+    "hUSDY": {
+      "code": "hUSDY",
+      "issuer": "GBLCVSKD2YJQARRSNXHMAX7EYLFSSQMQEDU6GOWAXH7X4LBVB62QN4A4",
+      "sac": "CD5I7KGZWMKOJJ6BELVDOBTRBXALAJIQUFYNJ26H7MHLROFG5SYZ4TTM"
+    },
+    "hXAU": {
+      "code": "hXAU",
+      "issuer": "GBLCVSKD2YJQARRSNXHMAX7EYLFSSQMQEDU6GOWAXH7X4LBVB62QN4A4",
+      "sac": "CBLHUKCZVPYUC76XCZ6TMYRHSG4CHD6HJNSNVGETVYQPMCD7Q2X4CWSW"
+    },
+    "hTRY": {
+      "code": "hTRY",
+      "issuer": "GBLCVSKD2YJQARRSNXHMAX7EYLFSSQMQEDU6GOWAXH7X4LBVB62QN4A4",
+      "sac": "CBAL3RREKQR23SP4Z3JEBSAPEUVOX6VJNXL2JIQOSSD4DEQSGGVJHJCS"
+    }
   },
   "blend": {
-    "mode": "blend",
+    "mode": "hazecredit",
     "poolFactory": "",
     "backstop": "",
     "emitter": "",
@@ -32,9 +48,9 @@
     "oracle": ""
   },
   "haze": {
-    "vaultWasmHash": "",
-    "vaultFactory": "",
-    "hazeCredit": "",
-    "mockOracle": ""
+    "vaultWasmHash": "5717f1e2676bc8ef4b71fdc92dcdd1a5d3eeacd3b593f3433cee0e4758e0553f",
+    "vaultFactory": "CCIBB55YM743L4OVEPDFTPSLR3FCIKQA3DRKNOLO4B7KSLA3FVSZERWH",
+    "hazeCredit": "CAG57CILKOYNVGS4WPVZIY752BC3V2MH4UOYB66BRTOZ4VUGINWI5BLE",
+    "mockOracle": "CC4CXM3FTETBHSNKTZ5HY5XFXKLOGXUXUGPMHXPH7CDQUBQRECJQXTRM"
   }
 }

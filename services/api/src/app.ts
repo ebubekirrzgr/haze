@@ -54,6 +54,11 @@ export function buildServices(env: Env, chain?: ChainOps): Services {
   return { env, db, chain: ch, credit, card, rules, prices, indexer, anchor, lithic, log };
 }
 
+/** bigint alanları (tutarlar, 7 ondalık) JSON'a string olarak yazılır; aksi halde c.json TypeError atar. */
+function bigintSafe<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v, (_k, x: unknown) => (typeof x === "bigint" ? x.toString() : x))) as T;
+}
+
 export function buildApp(s: Services) {
   const app = new Hono();
   const rl = new RateLimiter(10);
@@ -198,7 +203,7 @@ export function buildApp(s: Services) {
     const { userId, amountTry } = await c.req.json<{ userId: string; amountTry: number }>();
     try {
       const r = await s.anchor.startSalary(userId, Number(amountTry), (m) => s.log(`salary ${userId}: ${m}`));
-      return c.json(r);
+      return c.json(bigintSafe(r));
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
     }
@@ -206,7 +211,7 @@ export function buildApp(s: Services) {
   app.post("/salary/settle", async (c) => {
     const { userId, amount } = await c.req.json<{ userId: string; amount?: string }>();
     const r = await s.rules.settleSalary(userId, amount ? BigInt(amount) : undefined);
-    return c.json(r, r.ok ? 200 : 409);
+    return c.json(bigintSafe(r), r.ok ? 200 : 409);
   });
   app.post("/cashout/start", async (c) => {
     const { userId, amountTry } = await c.req.json<{ userId: string; amountTry: number }>();

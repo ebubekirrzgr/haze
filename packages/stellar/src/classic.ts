@@ -127,7 +127,15 @@ export async function estimateSendAmount(
 }
 
 /** Sponsor ücreti öder: iç işlemi fee-bump ile sarar ve imzalar. */
-export function feeBump(cfg: HazeConfig, sponsor: Keypair, inner: Transaction, maxFeePerOp = 100_000): FeeBumpTransaction {
+/**
+ * Sponsor fee-bump. Dış ücret = perOp × (op sayısı + 1) ve iç işlemin ücretini (Soroban kaynak ücreti dahil)
+ * kapsamak zorunda; bu yüzden perOp, iç ücretin üstüne en az `minInclusionPerOp` dahil etme payı bırakacak
+ * şekilde yükseltilir. Aksi halde surge fiyatlamasında tx_insufficient_fee alınır.
+ */
+export function feeBump(cfg: HazeConfig, sponsor: Keypair, inner: Transaction, minInclusionPerOp = 200_000): FeeBumpTransaction {
+  const ops = Math.max(1, inner.operations.length);
+  const innerFee = Number(inner.fee) || 0;
+  const maxFeePerOp = Math.ceil(innerFee / (ops + 1)) + minInclusionPerOp;
   const fb = TransactionBuilder.buildFeeBumpTransaction(sponsor, maxFeePerOp.toString(), inner, cfg.networkPassphrase);
   fb.sign(sponsor);
   return fb;

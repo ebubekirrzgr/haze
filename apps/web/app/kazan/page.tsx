@@ -92,7 +92,7 @@ export default function Kazan() {
   const dagit = () => {
     const active = rwas.filter((c) => alloc[c] > 0);
     return run(
-      [t("genel.passkeyImzala"), ...active.map((c) => `USDC → ${c} (path payment)`), `vault.deposit ×${active.length + 1}`],
+      [t("genel.passkeyImzala"), ...active.map((c) => t("kazan.adimSwap", { code: c })), t("kazan.adimDepositN", { n: active.length + 1 })],
       async (next) => {
         const ch = await ensure();
         next();

@@ -42,7 +42,7 @@ export default function Nakit() {
     setError(undefined);
     setResult([]);
     const parts = splitTry(amt);
-    const labels = [t("genel.passkeyImzala"), ...parts.flatMap((p, i) => [`${i + 1}. ${source === "borrow" ? "vault.borrow" : `vault.withdraw ${source}`} (${fmtTry(p)})`, `${i + 1}. ${t("nakit.adimTeklif")}`, `${i + 1}. ${source === "borrow" ? t("nakit.adimOdeme") : "PathPaymentStrictReceive → USDC"} (memo)`, `${i + 1}. ${t("nakit.adimAnchor")}`])];
+    const labels = [t("genel.passkeyImzala"), ...parts.flatMap((p, i) => [`${i + 1}. ${source === "borrow" ? t("nakit.adimBorc", { tutar: fmtTry(p) }) : t("nakit.adimCek", { code: source, tutar: fmtTry(p) })}`, `${i + 1}. ${t("nakit.adimTeklif")}`, `${i + 1}. ${source === "borrow" ? t("nakit.adimOdeme") : t("nakit.adimDex")}`, `${i + 1}. ${t("nakit.adimAnchor")}`])];
     setSteps(labels);
     setStep(0);
     let cur = 0;

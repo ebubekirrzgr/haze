@@ -75,10 +75,14 @@ document.querySelectorAll(".tus button").forEach((b) => b.addEventListener("clic
   render();
 }));
 const api = () => $("#api").value.replace(/\/$/, "");
+// Yönetim/terminal uçları paylaşımlı anahtar ister: ?key=… ile bir kez ver, localStorage'da kalır
+const KEY_PARAM = new URLSearchParams(location.search).get("key");
+if (KEY_PARAM) localStorage.setItem("haze.key", KEY_PARAM);
+const hdr = (extra = {}) => ({ ...extra, ...(localStorage.getItem("haze.key") ? { "x-haze-key": localStorage.getItem("haze.key") } : {}) });
 const log = (m) => { $("#log").textContent = (new Date().toLocaleTimeString("tr-TR") + "  " + m + "\n" + $("#log").textContent).slice(0, 1500); };
 async function loadUsers() {
   try {
-    const r = await fetch(api() + "/admin/users"); const us = await r.json();
+    const r = await fetch(api() + "/admin/users", { headers: hdr() }); const us = await r.json();
     const sel = $("#user"); sel.innerHTML = "";
     for (const u of us.filter((u) => u.card)) { const o = document.createElement("option"); o.value = u.id; o.textContent = `HAZE •••• ${u.card.last4} · ${u.id.slice(0, 6)}…`; sel.appendChild(o); }
     if (!sel.options.length) sel.innerHTML = '<option value="">Kartlı kullanıcı yok</option>';
@@ -95,7 +99,7 @@ $("#ode").addEventListener("click", async () => {
   $("#ode").disabled = true; $("#sonuc").innerHTML = ""; $("#sonrasi").style.display = "none";
   const t0 = performance.now();
   try {
-    const r = await fetch(api() + "/terminal/charge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, amountTry, merchant, city, mcc }) }).then((r) => r.json());
+    const r = await fetch(api() + "/terminal/charge", { method: "POST", headers: hdr({ "content-type": "application/json" }), body: JSON.stringify({ userId, amountTry, merchant, city, mcc }) }).then((r) => r.json());
     const ms = Math.round(performance.now() - t0);
     lastToken = r.token;
     const ok = r.result === "APPROVED" || r.via === "lithic";
@@ -108,8 +112,8 @@ $("#ode").addEventListener("click", async () => {
   } catch (e) { $("#sonuc").className = "sonuc red"; $("#sonuc").textContent = e.message; }
   $("#ode").disabled = false;
 });
-$("#clear").addEventListener("click", async () => { await fetch(api() + "/terminal/clear", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: lastToken }) }); log("clearing gönderildi"); });
-$("#void").addEventListener("click", async () => { await fetch(api() + "/terminal/void", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: lastToken }) }); log("void gönderildi → iade"); });
+$("#clear").addEventListener("click", async () => { await fetch(api() + "/terminal/clear", { method: "POST", headers: hdr({ "content-type": "application/json" }), body: JSON.stringify({ token: lastToken }) }); log("clearing gönderildi"); });
+$("#void").addEventListener("click", async () => { await fetch(api() + "/terminal/void", { method: "POST", headers: hdr({ "content-type": "application/json" }), body: JSON.stringify({ token: lastToken }) }); log("void gönderildi → iade"); });
 render();
 </script>
 </body>

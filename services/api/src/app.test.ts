@@ -48,6 +48,7 @@ function env(): Env {
     priceIntervalSec: 30,
     creditCacheSec: 10,
     verifyAsaHmac: false,
+    adminKey: "",
     publicUrl: "http://localhost",
   };
 }

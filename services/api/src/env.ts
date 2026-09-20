@@ -31,6 +31,8 @@ export interface Env {
   /** ASA HMAC doğrulaması (dev'de kapatılabilir) */
   verifyAsaHmac: boolean;
   publicUrl: string;
+  /** yönetim, terminal, fiyat tetikleme uçları için paylaşımlı anahtar (x-haze-key); boşsa kontrol yok (yerel geliştirme) */
+  adminKey: string;
 }
 
 function kp(name: string, optional = false): Keypair {
@@ -66,6 +68,7 @@ export function loadEnv(): Env {
     priceIntervalSec: Number(process.env.PRICE_INTERVAL_SEC ?? 30),
     creditCacheSec: Number(process.env.CREDIT_CACHE_SEC ?? 10),
     verifyAsaHmac: process.env.VERIFY_ASA_HMAC !== "false",
+    adminKey: process.env.API_ADMIN_KEY ?? "",
     publicUrl: process.env.PUBLIC_URL ?? "http://localhost:8787",
   };
 }

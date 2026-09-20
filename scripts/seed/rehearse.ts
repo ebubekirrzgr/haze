@@ -34,13 +34,13 @@ const t0 = Date.now();
 const log = (m: string) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
 
 async function post<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${API}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(`${API}${path}`, { method: "POST", headers: { "content-type": "application/json", ...(process.env.API_ADMIN_KEY ? { "x-haze-key": process.env.API_ADMIN_KEY } : {}) }, body: JSON.stringify(body) });
   const j = (await r.json()) as T & { error?: string };
   if (!r.ok) throw new Error(`${path} ${r.status}: ${j.error ?? JSON.stringify(j)}`);
   return j;
 }
 async function get<T = Record<string, unknown>>(path: string): Promise<T> {
-  const r = await fetch(`${API}${path}`);
+  const r = await fetch(`${API}${path}`, { headers: process.env.API_ADMIN_KEY ? { "x-haze-key": process.env.API_ADMIN_KEY } : {} });
   return (await r.json()) as T;
 }
 /** PWA'daki signAndSponsor: sahip imzalar, sponsor fee-bump eder */

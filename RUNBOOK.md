@@ -88,6 +88,7 @@ Prova için `DB_PATH` silinip `demo-user` yeniden koşulabilir (vault kalıcıd�
 - Hold `FAILED`: `GET /admin/holds`, `POST /admin/holds/<authId>/retry`.
 - Anchor `pending_trust`: USDC trustline yok — onboarding trustline'ları sponsorlu açar; demo-user için `ensureTrustline`.
 - RPC "needs state restore": kontrat TTL'i dolmuş → `stellar contract restore --id …` (haze-api her çağrıda instance TTL uzatır).
+- **Erişim anahtarı:** `.env` `API_ADMIN_KEY` doluysa `/admin/*`, `/terminal/*`, `/prices/tick`, `/anchor/treasury` `x-haze-key` başlığı ister. Terminali `http://localhost:3001/?key=<ANAHTAR>` ile bir kez açın (localStorage'da kalır); `rehearse` için `API_ADMIN_KEY=<ANAHTAR>` ortam değişkeni. Hesap açma IP başına dakikada 3.
 - Lithic sandbox işlem para birimini bozar (TRY → GBP, ülke USA): terminal Lithic'i çağırmadan önce API'ye `setHint(kart, TRY, kuruş)` bırakır, ASA gelince borç hTRY açılır. Gerçek ASA'da Lithic'in `amounts.merchant` alanı kullanılır.
 - Takas hazinesi (SETTLEMENT) her fiat token için trustline ister; `keys` script'i açar. Yoksa `borrow_for_card_asset` "trustline entry is missing" ile düşer.
 - Hold uzun süre `PENDING`, `attempts: 0`: operatör kuyruğu bir RPC çağrısında asılı kalmış. Logda `hold … borrow_for_card →` var ama `BORROWED` yoksa RPC; hiç yoksa kuyruk. RPC istemcisinde 30 sn zaman aşımı ve sınırlı bekleme var; en kötü ihtimalle haze-api'yi yeniden başlat, hold ilk turda işlenir.

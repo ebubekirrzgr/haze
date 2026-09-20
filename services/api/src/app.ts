@@ -63,8 +63,25 @@ function bigintSafe<T>(v: T): T {
 export function buildApp(s: Services) {
   const app = new Hono();
   const rl = new RateLimiter(10);
+  /** hesap açma: IP başına dakikada 3 (sponsor rezervi musluğa dönüşmesin) */
+  const onboardRl = new RateLimiter(3);
   const cfg = s.env.cfg;
   app.use("*", cors());
+
+  // Erişim denetimi. API internete açık: yönetim, terminal (operatörle borç açar), fiyat tetikleme ve anchor hazinesi
+  // uçları paylaşımlı anahtar ister (x-haze-key başlığı ya da ?key=). API_ADMIN_KEY boşsa (yerel geliştirme) denetim yok.
+  const clientIp = (c: { req: { header: (n: string) => string | undefined } }) =>
+    c.req.header("cf-connecting-ip") ?? c.req.header("fly-client-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  app.use("*", async (c, next) => {
+    const p = c.req.path;
+    const guarded = p.startsWith("/admin") || p.startsWith("/terminal") || p === "/prices/tick" || p === "/anchor/treasury";
+    if (guarded && s.env.adminKey) {
+      const key = c.req.header("x-haze-key") ?? c.req.query("key");
+      if (key !== s.env.adminKey) return c.json({ error: "unauthorized" }, 401);
+    }
+    if ((p === "/onboard" || p === "/onboard/submit") && !onboardRl.allow(clientIp(c))) return c.json({ error: "rate limited" }, 429);
+    await next();
+  });
 
   app.get("/health", (c) => c.json({ ok: true, mode: cfg.blend.mode, lithic: !!s.lithic, ts: Date.now() }));
 

@@ -18,6 +18,13 @@
   <a href="README.md">English</a>
 </p>
 
+<p align="center">
+  <b><a href="https://haze.iyi.im/landing">Demo ve video</a></b> ·
+  <a href="https://haze.iyi.im">Canlı uygulama (testnet)</a> ·
+  <a href="https://haze.iyi.im/media/haze-demo.mp4">Tanıtım videosu — 3 dk</a> ·
+  <a href="https://drive.google.com/file/d/1-r00MhogQUEiFXthk6WQOOD-Hobcn0pa/view?usp=sharing">Sunum</a>
+</p>
+
 ---
 
 ## Genel bakış
@@ -236,6 +243,27 @@ Tam teknik yazı (mimari, bileşenler, Stellar entegrasyonları, tasarım kararl
 ---
 
 ## Başlangıç
+
+### Canlı demo
+
+Testnet kurulumu **[haze.iyi.im](https://haze.iyi.im)** adresinde çalışıyor — PWA, API ve POS terminali tek alan adı altında.
+
+| | |
+|---|---|
+| Tanıtım sayfası ve video | <https://haze.iyi.im/landing> |
+| PWA (testnet, Blend v2 havuzu) | <https://haze.iyi.im> |
+| Demo videosu, 3 dk | <https://haze.iyi.im/media/haze-demo.mp4> |
+| Sunum | [Google Drive](https://drive.google.com/file/d/1-r00MhogQUEiFXthk6WQOOD-Hobcn0pa/view?usp=sharing) |
+
+PWA'yı açıp **Demo hesabını içe aktar** deyin — anahtar alanı aşağıdaki demo hesabıyla hazır gelir, doğrudan teminatı dolu bir kasaya düşersiniz. `/terminal` adresindeki POS, paylaşımlı yönetim anahtarını `?key=…` ile ister.
+
+```
+DEMO_USER_SECRET = SC6DTHLG4VOCZMVFJWASHXL7X7RJYZCBP53MW7WPJNH3G5RIMG6EHFNW
+```
+
+Bu bir **Stellar testnet** anahtarıdır ve ortak demo hesabına aittir: gerçek değer taşımaz, teminatını herkes harcayabilir, demo yeniden kurulduğunda sıfırlanır. Başka hiçbir yerde kullanmayın.
+
+Kurulumun kendisi — Docker Compose, tek açık port, Cloudflare tüneli — [`deploy/`](deploy/README.md) altında.
 
 ### Gereksinimler
 

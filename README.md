@@ -18,6 +18,13 @@
   <a href="README.tr.md">Türkçe</a>
 </p>
 
+<p align="center">
+  <b><a href="https://haze.iyi.im/landing">Demo &amp; video</a></b> ·
+  <a href="https://haze.iyi.im">Live app (testnet)</a> ·
+  <a href="https://haze.iyi.im/media/haze-demo.mp4">Walkthrough — 3 min</a> ·
+  <a href="https://drive.google.com/file/d/1-r00MhogQUEiFXthk6WQOOD-Hobcn0pa/view?usp=sharing">Pitch deck</a>
+</p>
+
 ---
 
 ## Overview
@@ -236,6 +243,27 @@ The full technical write-up (architecture, components, Stellar integrations, des
 ---
 
 ## Getting started
+
+### Try the live demo
+
+A testnet deployment runs at **[haze.iyi.im](https://haze.iyi.im)** — PWA, API and POS terminal behind one origin.
+
+| | |
+|---|---|
+| Landing page with the walkthrough video | <https://haze.iyi.im/landing> |
+| PWA (testnet, Blend v2 pool) | <https://haze.iyi.im> |
+| Demo video, 3 min | <https://haze.iyi.im/media/haze-demo.mp4> |
+| Pitch deck | [Google Drive](https://drive.google.com/file/d/1-r00MhogQUEiFXthk6WQOOD-Hobcn0pa/view?usp=sharing) |
+
+Open the PWA and choose **Import demo account** — the key field is prefilled with the demo account below, so you land straight on a funded vault. The POS terminal at `/terminal` needs the shared admin key as `?key=…`.
+
+```
+DEMO_USER_SECRET = SC6DTHLG4VOCZMVFJWASHXL7X7RJYZCBP53MW7WPJNH3G5RIMG6EHFNW
+```
+
+This is a **Stellar testnet** key for a shared demo account. It holds no real value, anyone can spend its collateral, and it is reset whenever the demo is re-seeded. Never reuse it for anything else.
+
+The deployment itself — Docker Compose, single exposed port, Cloudflare tunnel — is in [`deploy/`](deploy/README.md).
 
 ### Prerequisites
 

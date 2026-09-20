@@ -1,0 +1,253 @@
+/* HAZE — tanıtım sayfası (/landing). Renkler ve tipografi globals.css'teki marka sisteminden gelir. */
+
+.lp {
+  position: relative;
+  min-height: 100dvh;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 72px;
+  overflow: hidden;
+}
+.lp-atmos {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.lp-atmos > i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+.lp-atmos > .lp-gren {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: radial-gradient(rgba(59, 50, 38, 0.9) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+}
+.lp > * {
+  position: relative;
+  z-index: 1;
+}
+
+.lp-ust {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 26px 0 0;
+}
+.lp-rozet {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 13px;
+  background: var(--pudra);
+  color: var(--kiremit);
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+/* Hero */
+.lp-hero {
+  padding: 72px 0 56px;
+  max-width: 720px;
+}
+.lp-hero h1 {
+  margin: 0;
+  font-size: clamp(38px, 7vw, 68px);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+.lp-alt {
+  margin: 10px 0 0;
+  font-size: clamp(20px, 3vw, 28px);
+  color: var(--bronz);
+}
+.lp-giris {
+  margin: 26px 0 0;
+  font-size: clamp(17px, 2vw, 20px);
+  line-height: 1.6;
+  color: var(--ikincil);
+  max-width: 620px;
+}
+.lp-giris strong {
+  color: var(--sepya);
+  font-weight: 500;
+}
+
+/* Butonlar */
+.lp-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+.lp-btn {
+  height: 56px;
+  padding: 0 28px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 500;
+  transition: transform 0.08s ease, opacity 0.2s;
+}
+.lp-btn:active {
+  transform: scale(0.985);
+}
+.lp-btn-altin {
+  background: var(--altin);
+  color: var(--sepya);
+}
+.lp-btn-sepya {
+  background: var(--sepya);
+  color: var(--krem);
+}
+.lp-btn-cizgi {
+  border: 1px solid rgba(59, 50, 38, 0.22);
+  color: var(--sepya);
+  background: rgba(251, 248, 241, 0.5);
+}
+.lp-btn-cizgi:hover {
+  border-color: rgba(59, 50, 38, 0.4);
+}
+
+/* Video */
+.lp-video-blok {
+  padding-top: 8px;
+}
+.lp-video {
+  border-radius: 26px;
+  overflow: hidden;
+  background: var(--zemin-koyu);
+  box-shadow: 0 24px 70px rgba(59, 50, 38, 0.22), 0 0 0 1px rgba(59, 50, 38, 0.08);
+}
+.lp-video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 78dvh;
+  background: var(--zemin-koyu);
+}
+
+/* Bölümler */
+.lp-bolum {
+  padding: 64px 0 0;
+}
+.lp-bolum .etiket {
+  margin: 0 0 22px;
+}
+
+.lp-adimlar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.lp-adim {
+  padding: 24px 22px 26px;
+  border-radius: var(--radius);
+  background: var(--cam);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 10px 36px rgba(59, 50, 38, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.lp-no {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--altin);
+}
+.lp-adim h3 {
+  margin: 14px 0 8px;
+  font-size: 20px;
+  font-weight: 500;
+}
+.lp-adim p,
+.lp-ozellik p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ikincil);
+}
+
+.lp-ozellikler {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 40px;
+}
+.lp-ozellik {
+  padding-top: 18px;
+  border-top: 1px solid rgba(59, 50, 38, 0.14);
+}
+.lp-ozellik h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* Kapanış */
+.lp-kapanis {
+  margin-top: 24px;
+  padding: 44px 40px 46px;
+  border-radius: 28px;
+  background: var(--cam-sicak);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+.lp-kapanis h2 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.15;
+}
+.lp-kapanis p {
+  margin: 18px 0 0;
+  max-width: 680px;
+  color: var(--ikincil);
+  line-height: 1.6;
+}
+
+/* Dip */
+.lp-dip {
+  margin-top: 64px;
+  padding-top: 26px;
+  border-top: 1px solid rgba(59, 50, 38, 0.14);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.lp-dip p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ikincil);
+  max-width: 620px;
+}
+.lp-dip strong {
+  color: var(--kiremit);
+  font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .lp-adimlar {
+    grid-template-columns: 1fr;
+  }
+  .lp-ozellikler {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .lp-hero {
+    padding: 48px 0 40px;
+  }
+  .lp-kapanis {
+    padding: 32px 24px 34px;
+  }
+  .lp-btn {
+    flex: 1 1 auto;
+  }
+}

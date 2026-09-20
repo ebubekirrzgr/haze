@@ -18,3 +18,7 @@ test_snapshots/
 packages/bindings/
 .blend-utils/
 services/api/.env.demo-*
+
+# deploy: sunucuya ozel gizli anahtarlar ve buyuk medya
+deploy/api.env
+deploy/media/

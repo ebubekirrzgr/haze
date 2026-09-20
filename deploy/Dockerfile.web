@@ -1,0 +1,27 @@
+# haze-web — Next.js 15 PWA. Baglam: depo koku (docker build -f deploy/Dockerfile.web .)
+FROM node:22-bookworm-slim AS base
+RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/stellar/package.json packages/stellar/
+COPY services/api/package.json services/api/
+COPY scripts/package.json scripts/
+COPY apps/web/package.json apps/web/
+COPY apps/terminal/package.json apps/terminal/
+RUN pnpm install --frozen-lockfile --filter @haze/web... --filter @haze/stellar...
+COPY packages/stellar packages/stellar
+COPY apps/web apps/web
+COPY testnet.contracts.json ./
+# Ayni origin: tarayici /api uzerinden haze-api ile konusur.
+# next.config.ts rewrite hedefleri BUILD sirasinda routes-manifest.json a gomulur,
+# bu yuzden compose servis adlari runtime degil burada verilir.
+ENV NEXT_PUBLIC_API_URL=/api NODE_ENV=production
+ENV API_ORIGIN=http://api:8787
+ENV TERMINAL_ORIGIN=http://terminal:3001
+# Testnet demo hesabinin anahtari: PWA'da "Demo hesabini ice aktar" alani hazir gelir.
+# Testnet anahtaridir, gercek deger tasimaz; ayni anahtar README'de de yazilidir.
+ENV NEXT_PUBLIC_DEMO_SECRET=SC6DTHLG4VOCZMVFJWASHXL7X7RJYZCBP53MW7WPJNH3G5RIMG6EHFNW
+WORKDIR /app/apps/web
+RUN pnpm build
+EXPOSE 3000
+CMD ["pnpm", "start"]

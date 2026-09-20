@@ -21,7 +21,8 @@ function Onboarding() {
   const [step, setStep] = useState(0);
   const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState<string>();
-  const [secret, setSecret] = useState("");
+  // Yayındaki testnet demosunda anahtar hazır gelir (NEXT_PUBLIC_DEMO_SECRET); yerelde boş başlar.
+  const [secret, setSecret] = useState(process.env.NEXT_PUBLIC_DEMO_SECRET ?? "");
   const { t } = useLang();
 
   const run = async (fn: (onStep: (s: string) => void) => Promise<void>) => {

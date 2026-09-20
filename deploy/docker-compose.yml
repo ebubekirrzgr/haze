@@ -1,0 +1,29 @@
+# haze — dev.ivo.tc /emre/haze. Disariya sadece web acilir (127.0.0.1:3100),
+# api ve terminal ic agda kalir; tarayici onlara /api ve /terminal uzerinden erisir.
+name: haze
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    env_file: [ ./api.env ]
+    volumes: [ "haze_data:/data" ]
+    restart: unless-stopped
+
+  terminal:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.terminal
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    volumes: [ "./media:/app/apps/web/public/media:ro" ]
+    ports: [ "127.0.0.1:3100:3000" ]
+    depends_on: [ api, terminal ]
+    restart: unless-stopped
+
+volumes:
+  haze_data:
